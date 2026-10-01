@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f6f2"><meta name="description" content="依自家實測格局建立的 2D / 3D 家具配置工具，登入後載入私人格局與雲端配置。">
+  <title>我家 3D 裝潢模擬器</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="./styles.css">
+  <script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/controls/OrbitControls.js":"./vendor/OrbitControls.js"}}</script>
+</head>
+<body>
+<header><a class="brand" href="./" aria-label="我家 3D 裝潢模擬器"><span class="logo">⌂</span><span>我家<span class="brand-sub">3D 裝潢模擬器</span></span></a>
+  <div class="segmented" aria-label="查看模式"><button id="mode2d" aria-pressed="false">2D 平面</button><button id="mode3d" aria-pressed="true">3D 空間</button><button id="modewalk" aria-pressed="false">漫遊</button></div>
+  <button id="cloud-button" class="cloud-button">雲端登入</button><div class="save-badge" id="save-status" role="status">● 本機配置</div>
+</header>
+<main>
+  <section class="workspace" aria-label="房屋配置工作區">
+    <div class="canvas-title"><span class="eyebrow">MY HOME / 01</span><h1>把家的想像，放進空間。</h1><p>私人格局 <span>依實測格局重建</span></p></div>
+    <div id="viewport"><div id="three-view" aria-label="3D 房屋，可旋轉、縮放與平移"></div><svg id="plan-view" role="img" aria-label="2D 房屋平面圖" hidden></svg></div>
+    <div id="walk-ui" hidden>
+      <div class="walk-actions"><button id="exit-walk">退出漫遊</button><button id="home-walk">回到起點</button></div>
+      <div id="walk-hint" role="status" aria-live="polite"></div>
+      <div id="walk-joystick" role="group" aria-label="漫遊移動搖桿：向上前進、向下後退、左右平移"><span></span><i aria-hidden="true">↑</i></div>
+      <div class="walk-crosshair" aria-hidden="true">·</div>
+    </div>
+    <div class="floating-tools"><button id="reset-view" title="重設視角" aria-label="重設視角">⌂</button><button id="top-view" title="俯視視角" aria-label="俯視視角">▦</button><button id="zoom-in" title="放大" aria-label="放大">＋</button><button id="zoom-out" title="縮小" aria-label="縮小">−</button></div>
+    <button class="assumption-chip" data-panel="info">◉ 格局含推算值 <span>查看依據 ↗</span></button>
+    <div class="view-hint" id="view-hint">單指／左鍵旋轉 · 雙指縮放平移</div>
+    <div id="move-banner" hidden>移動模式 · 拖曳選取家具，或用下方按鈕微調 <button id="finish-move">完成</button></div>
+  </section>
+  <aside id="panel" aria-label="配置工具">
+    <div class="panel-heading"><div><span class="eyebrow" id="panel-kicker">MAKE ROOM FOR LIVING</span><h2 id="panel-title">放入一件家具</h2></div><button id="close-panel" aria-label="收起工具面板">×</button></div>
+    <div id="panel-content"></div>
+  </aside>
+</main>
+<nav class="toolbar" aria-label="工具列"><button data-panel="add" class="active"><span>＋</span>家具</button><button data-panel="colors"><span>◐</span>配色</button><button data-panel="view"><span>◇</span>視角</button><button data-panel="objects"><span>▤</span>物件 <small id="object-count"></small></button></nav>
+<div id="toast" role="status" aria-live="polite"></div>
+<dialog id="reset-dialog"><h2>恢復預設配置？</h2><p>目前的家具與配色將被替換為示範配置。</p><div class="button-row"><button id="cancel-reset">保留目前配置</button><button id="confirm-reset" class="danger">恢復預設</button></div></dialog>
+<dialog id="cloud-dialog" aria-label="我的雲端家"></dialog>
+<noscript>請開啟 JavaScript 才能使用家具配置與 3D 功能。</noscript>
+<script type="module" src="./private-boot.js"></script>
+</body></html>

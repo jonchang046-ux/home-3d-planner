@@ -1,0 +1,82 @@
+import {initCloud} from './cloud-ui.js';
+import {createMyItemsUI} from './my-items-ui.js';
+import {actualSize,dimensionsText} from './my-items-data.js';
+import {collectAssets} from './my-items-store.js';
+import {houseConfig,allRooms} from './house-config.js';
+import {catalog,categories,newFurniture,defaults} from './furniture.js';
+import {furnitureIcon} from './furniture-icons.js';
+import {load,save} from './storage.js';
+import {createPlan} from './plan.js';
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const loaded=load();let state=loaded.state,selected=null,mode='3d',panel='add',moving=false,scene=null,toastTimer,ready3d=false;
+let furnitureCategory='living',cloud;
+let walkHintTimer,walkPanelWasClosed=false;
+function walkHint(message){$('#walk-hint').textContent=message;$('#walk-hint').classList.add('visible');clearTimeout(walkHintTimer);walkHintTimer=setTimeout(()=>$('#walk-hint').classList.remove('visible'),5500);}
+const escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(msg){$('#toast').textContent=msg;$('#toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('visible'),3000);}
+function status(text,warning=false){$('#save-status').textContent=`${warning?'!':'●'} ${text}`;$('#save-status').classList.toggle('warning',warning);}
+status(loaded.message,loaded.warning);
+function persist(){if(cloud?.active){try{cloud.capture();}catch(e){status('同步暫存失敗，請勿關閉此頁',true);toast(e.message);}return;}const ok=save(state);status(ok?'已儲存至此瀏覽器':'儲存失敗，請勿關閉此頁',!ok);if(!ok)toast('瀏覽器無法保存，請檢查儲存空間或隱私設定');}
+const callbacks={onSelect:select,onMove:move,onMoveEnd:()=>{persist();if(panel==='edit'&&!$('#panel').classList.contains('closed'))renderPanel();},isMoving:()=>moving,onWalkHint:walkHint,onAssetError:toast};
+const plan=createPlan($('#plan-view'),callbacks);
+function render(architecture=false){plan.render(state,selected);scene?.render(state,selected,architecture);$('#object-count').textContent=state.furniture.length;}
+function showPanel(name){panel=name;$('#panel').classList.remove('closed');$('.workspace').classList.add('sheet-open');$$('.toolbar [data-panel]').forEach(b=>b.classList.toggle('active',b.dataset.panel===name||(name==='my-items'&&b.dataset.panel==='add')||(name==='edit'&&b.dataset.panel==='objects')));renderPanel();}
+function closePanel(){$('#panel').classList.add('closed');$('.workspace').classList.remove('sheet-open');}
+function select(id){selected=id;setMoving(false);render();showPanel('edit');}
+function setMoving(value){moving=value;scene?.setMoving(value);$('#move-banner').hidden=!value;$('#view-hint').textContent=value?'移動模式：視角已鎖定':mode==='2d'?(state.furniture.some(f=>f.model?.assetId)?'實線外框：目標尺寸 · 虛線內框：模型占地':'點選家具 · 開啟移動模式後拖曳'):'單指／左鍵旋轉 · 雙指縮放平移';}
+function move(id,x,z){const f=state.furniture.find(f=>f.id===id);if(!f)return;f.x=Math.round(Math.max(houseConfig.bounds.minX,Math.min(houseConfig.bounds.maxX,x))*100)/100;f.z=Math.round(Math.max(houseConfig.bounds.minZ,Math.min(houseConfig.bounds.maxZ,z))*100)/100;render();}
+function setMode(next){
+  if(next!=='2d'&&!ready3d){toast('3D 尚未就緒；可先操作 2D');return;}
+  if(next==='walk'&&mode!=='walk'){
+    setMoving(false);
+    if(!scene.setWalk(true)){toast('找不到可安全站立的位置，請先移開部分家具再進入漫遊');return;}
+    walkPanelWasClosed=$('#panel').classList.contains('closed');closePanel();
+    document.body.classList.add('walk-mode');$('#walk-ui').hidden=false;
+    walkHint(matchMedia('(pointer:coarse)').matches?'左手搖桿移動｜右手滑動畫面轉頭':'點擊畫面開始｜WASD 移動｜滑鼠轉頭｜ESC 解除');
+  }else if(mode==='walk'&&next!=='walk'){
+    scene.setWalk(false);document.body.classList.remove('walk-mode');$('#walk-ui').hidden=true;
+    clearTimeout(walkHintTimer);$('#walk-hint').classList.remove('visible');
+    if(!walkPanelWasClosed)showPanel(panel);else closePanel();
+  }
+  mode=next;$('#plan-view').toggleAttribute('hidden',mode!=='2d');$('#three-view').hidden=mode==='2d';
+  for(const value of ['2d','3d','walk'])$('#mode'+value).setAttribute('aria-pressed',mode===value);
+  scene?.setActive(mode!=='2d');setMoving(false);if(panel==='view'&&mode!=='walk')renderPanel();
+}
+function formFields(f,adding=false){return `<label>名稱<input name="name" value="${escape(f.name)}" required maxlength="60" autocomplete="off"></label><input type="hidden" name="type" value="${f.type}"><p class="inline-note">${catalog[f.type].label} · 寬 × 深 × 高為整件外框，含床頭板／椅背。${catalog[f.type].note??''}</p><div class="field-row">${[['width','寬'],['depth','深'],['height','高']].map(([key,label])=>`<label>${label}（cm）<input name="${key}" type="number" inputmode="decimal" min="10" max="500" step="any" required value="${f[key]}"></label>`).join('')}</div><label>家具顏色<input name="color" type="color" value="${f.color}"></label>${adding?'':`<div class="field-row two"><label>X 位置（m）<input name="x" type="number" inputmode="decimal" step="0.01" min="${houseConfig.bounds.minX}" max="${houseConfig.bounds.maxX}" value="${f.x}" required></label><label>圖面縱向（m）<input name="z" type="number" inputmode="decimal" step="0.01" min="${houseConfig.bounds.minZ}" max="${houseConfig.bounds.maxZ}" value="${f.z}" required></label></div><label>旋轉（度）<input name="rotation" type="number" inputmode="decimal" min="0" max="359" step="1" value="${f.rotation}" required></label>`}`;}
+function values(form){const data=new FormData(form),v={name:data.get('name').trim(),color:data.get('color')};for(const k of ['width','depth','height','x','z','rotation'])if(data.has(k))v[k]=Number(data.get(k));return v;}
+function renderPanel(){
+  myItems.dispose();
+  const content=$('#panel-content'),title=$('#panel-title');
+  if(panel==='my-items'){myItems.list();return;}
+  if(panel==='add'){title.textContent='家具庫';content.innerHTML=`<div class="furniture-library"><div class="item-source"><button aria-pressed="true">預設家具</button><button id="open-my-items">我的物品</button></div><p class="section-note">選分類，再挑一件家具。尺寸與顏色都能調整。</p><div class="furniture-categories" role="group" aria-label="家具分類">${categories.map(c=>`<button data-category="${c.id}" aria-pressed="${c.id===furnitureCategory}">${c.label}</button>`).join('')}</div><div class="library-heading"><b>${categories.find(c=>c.id===furnitureCategory).label}</b><span>${Object.values(catalog).filter(f=>f.category===furnitureCategory).length} 種家具</span></div><div class="catalog">${Object.entries(catalog).filter(([,f])=>f.category===furnitureCategory).map(([key,f])=>`<button data-type="${key}"><span class="f-icon">${furnitureIcon(key)}</span><span class="f-name">${f.label}</span><small>${f.width} × ${f.depth} × ${f.height} cm</small></button>`).join('')}</div><div class="panel-footer">找不到需要的物品？「其他」可建立自訂物件。<br>預設尺寸僅供起步，請依實品調整。</div></div>`;$('#open-my-items').onclick=()=>showPanel('my-items');content.querySelectorAll('[data-category]').forEach(b=>b.onclick=()=>{furnitureCategory=b.dataset.category;renderPanel();content.querySelector(`[data-category="${furnitureCategory}"]`).focus({preventScroll:true});});content.querySelectorAll('[data-type]').forEach(b=>b.onclick=()=>addForm(b.dataset.type));$('#panel').scrollTop=0;}
+  if(panel==='edit'){const f=state.furniture.find(f=>f.id===selected);if(!f){showPanel('objects');return;}title.textContent=f.name;content.innerHTML=`<div class="button-row"><button id="move-toggle" class="${moving?'active':'primary'}">${moving?'完成移動':'↔ 移動家具'}</button><button id="rotate90">旋轉 90°</button></div><div class="nudge" aria-label="每次移動 10 公分"><button class="up" data-dx="0" data-dz="-.1" aria-label="向上移動 10 公分">↑</button><button class="left" data-dx="-.1" data-dz="0" aria-label="向左移動 10 公分">←</button><button data-dx="0" data-dz=".1" aria-label="向下移動 10 公分">↓</button><button data-dx=".1" data-dz="0" aria-label="向右移動 10 公分">→</button></div><p class="inline-note">方向按鈕依 2D 圖面，每次 10 cm。自由放置尚無碰撞檢查。</p>${f.libraryItemId?`<p class="inline-note">我的物品的場景副本；修改不影響物品庫。${f.model?.assetId?`目標 ${f.width} × ${f.depth} × ${f.height} cm；模型實際 ${dimensionsText(actualSize(f))} cm（${f.model.scaleMode==='stretch'?'強制符合':'保持比例'}）。2D 外框＝目標，內框＝模型。`:``}</p>`:``}<form id="edit-form">${formFields(f)}<p id="form-error" class="error" role="alert" hidden></p><div class="button-row"><button class="primary" type="submit">套用修改</button><button id="delete" type="button" class="danger">刪除家具</button></div></form>`;
+    $('#move-toggle').onclick=()=>{setMoving(!moving);if(moving&&matchMedia('(max-width:760px)').matches)closePanel();else renderPanel();};
+    $('#rotate90').onclick=()=>{f.rotation=(f.rotation+90)%360;render();persist();renderPanel();};
+    content.querySelectorAll('[data-dx]').forEach(b=>b.onclick=()=>{move(f.id,f.x+Number(b.dataset.dx),f.z+Number(b.dataset.dz));persist();renderPanel();});
+    $('#edit-form').onsubmit=e=>{e.preventDefault();const v=values(e.currentTarget);if(!v.name){$('#form-error').hidden=false;$('#form-error').textContent='請填寫家具名稱';return;}Object.assign(f,v);render();persist();renderPanel();toast('家具已更新');};
+    $('#edit-form [name=color]').oninput=e=>{f.color=e.target.value;if(f.model?.assetId)f.model.tint=true;render();persist();};
+    $('#delete').onclick=()=>{state.furniture=state.furniture.filter(v=>v.id!==f.id);selected=null;setMoving(false);render();persist();showPanel('objects');toast('家具已刪除');collectAssets().catch(()=>{});};
+  }
+  if(panel==='objects'){title.textContent=`空間裡的物件 · ${state.furniture.length}`;content.innerHTML=`<p class="section-note">選取家具即可編輯。也可以直接點選模型。</p><div class="object-list">${state.furniture.map(f=>`<button class="object-row ${f.id===selected?'active':''}" data-id="${f.id}"><i class="color-dot" style="background:${f.color}"></i><span>${escape(f.name)}<small>${f.width} × ${f.depth} × ${f.height} cm · ${f.rotation}°</small></span>›</button>`).join('')||'<p class="empty">空間準備好了，加入第一件家具吧。</p>'}</div><button id="another" class="block-button primary">＋ 新增家具</button>`;content.querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>select(b.dataset.id));$('#another').onclick=()=>showPanel('add');}
+  if(panel==='colors'){title.textContent='家的配色';const palettes={wallColor:[['白色','#ffffff'],['米白','#eeeae1'],['淺灰','#caced0']],floorColor:[['淺木','#d9c7a6'],['中木','#c6aa83'],['深木','#80634f'],['灰色','#b3b5b0']]};content.innerHTML=`<p class="section-note">換個顏色，看空間有什麼不同。<br>整屋同步套用，變更立即保存。</p>${Object.entries(palettes).map(([key,colors])=>`<h3 class="subheading">${key==='wallColor'?'牆面':'地板'}</h3><div class="swatches">${colors.map(([name,color])=>`<button class="swatch" data-key="${key}" data-color="${color}" aria-label="${key==='wallColor'?'牆面':'地板'}${name}" title="${name}" aria-pressed="${state[key]===color}" style="background:${color}"></button>`).join('')}</div><label>自訂${key==='wallColor'?'牆面':'地板'}顏色<input type="color" data-color-input="${key}" value="${state[key]}"></label>`).join('')}<div class="panel-footer">2D 牆線使用固定深色以方便辨讀；牆面配色顯示於 3D。木色為純色示意。</div>`;
+    content.querySelectorAll('[data-color]').forEach(b=>b.onclick=()=>{state[b.dataset.key]=b.dataset.color;render(true);persist();renderPanel();});content.querySelectorAll('[data-color-input]').forEach(i=>i.oninput=()=>{state[i.dataset.colorInput]=i.value;render(true);persist();});}
+  if(panel==='view'){title.textContent='換個角度看家';content.innerHTML=`<div class="button-row"><button id="panel-reset">⌂ 重設</button><button id="panel-top">▦ 俯視</button></div><button id="wall-toggle" class="block-button ${scene?.lowWalls?'active':''}" ${!ready3d?'disabled':''}>${scene?.lowWalls?'低牆檢視 · 點此看全高':'完整牆高 · 點此切低牆'}</button><button id="label-toggle" class="block-button" ${!ready3d?'disabled':''}>${scene?.showLabels?'隱藏':'顯示'}房間名稱</button><div class="view-card"><b>手機 3D</b><br>單指拖曳：旋轉<br>雙指捏合：縮放<br>雙指同向拖曳：平移<br><br><b>電腦 3D</b><br>左鍵拖曳：旋轉<br>滾輪：縮放<br>右鍵拖曳：平移</div><p class="inline-note">低牆只改變顯示高度，實際預設牆高仍為 280 cm。2D 使用右側 ＋／− 縮放。</p><button id="reset-state" class="block-button danger">恢復預設配置</button>`;$('#panel-reset').onclick=()=>resetView();$('#panel-top').onclick=()=>resetView(true);$('#wall-toggle').onclick=()=>{scene.setWalls(!scene.lowWalls);renderPanel();};$('#label-toggle').onclick=()=>{scene.setLabels(!scene.showLabels);renderPanel();};$('#reset-state').onclick=()=>$('#reset-dialog').showModal();}
+  if(panel==='info'){title.textContent='格局的依據與假設';content.innerHTML=`<p class="section-note">${escape(houseConfig.source)}<br>圖面標註 ≠ 完整施工尺寸。模型僅供裝潢配置探索。</p>${houseConfig.measurements.map(m=>`<div class="info-item"><b>${escape(m.area)}</b>圖面：${escape(m.observed)}<br>模型：${escape(m.model)}<span>${escape(m.status)}</span></div>`).join('')}<h3 class="subheading">集中記錄的假設</h3><ol class="info-list">${houseConfig.assumptions.map(a=>`<li>${escape(a)}</li>`).join('')}</ol><p class="inline-note">後續請修改 house-config.js 的 rooms、walls、doors、windows、balcony 與 floor；2D 與 3D 共用資料。</p>`;}
+}
+function addForm(type){const f=newFurniture(type);$('#panel-title').textContent=`設定${catalog[type].label}`;$('#panel-content').innerHTML=`<form id="add-form">${formFields(f,true)}<label>放入哪個空間<select name="room">${allRooms.map(r=>`<option value="${r.id}" ${r.id==='living'?'selected':''}>${r.name}</option>`).join('')}</select></label><p class="inline-note">家具放入房間中央附近，可再調整位置。尺寸範圍 10–500 cm。</p><p id="form-error" class="error" role="alert" hidden></p><div class="button-row"><button type="button" id="back-add">返回</button><button type="submit" class="primary">加入空間</button></div></form>`;$('#back-add').onclick=()=>showPanel('add');$('#panel').scrollTop=0;$('#add-form').onsubmit=e=>{e.preventDefault();if(state.furniture.length>=200){toast('此版本最多 200 件家具');return;}const form=e.currentTarget,v=values(form);if(!v.name){$('#form-error').hidden=false;$('#form-error').textContent='請填寫家具名稱';return;}const room=allRooms.find(r=>r.id===form.elements.room.value),item=newFurniture(form.elements.type.value,{...v,x:room.label[0],z:room.label[1]});state.furniture.push(item);persist();select(item.id);toast('家具已加入，可開啟移動模式');};}
+function resetView(top=false){if(mode==='2d')plan.reset();else scene?.reset(top);}
+$$('[data-panel]').forEach(b=>b.onclick=()=>{setMoving(false);showPanel(b.dataset.panel);});
+$('#close-panel').onclick=closePanel;$('#mode2d').onclick=()=>setMode('2d');$('#mode3d').onclick=()=>setMode('3d');$('#reset-view').onclick=()=>resetView();$('#top-view').onclick=()=>resetView(true);$('#zoom-in').onclick=()=>mode==='2d'?plan.zoom(1.18):scene?.zoom(1.18);$('#zoom-out').onclick=()=>mode==='2d'?plan.zoom(1/1.18):scene?.zoom(1/1.18);$('#finish-move').onclick=()=>{setMoving(false);showPanel('edit');};$('#cancel-reset').onclick=()=>$('#reset-dialog').close();$('#confirm-reset').onclick=()=>{state=defaults();selected=null;setMoving(false);render(true);persist();$('#reset-dialog').close();showPanel('objects');toast('已恢復預設配置');collectAssets().catch(()=>{});};
+// 拖曳後部分觸控瀏覽器會抑制相容性 click；完成按鈕直接處理 touch pointerup。
+$('#modewalk').onclick=()=>setMode('walk');
+$('#exit-walk').onclick=()=>setMode('3d');
+$('#home-walk').onclick=()=>{if(scene?.resetWalk())walkHint('已回到安全起點');else walkHint('找不到安全起點，請退出漫遊並移開部分家具');};
+$('#finish-move').addEventListener('pointerup',e=>{if(e.pointerType==='touch'){e.preventDefault();setMoving(false);showPanel('edit');}});
+window.addEventListener('pagehide',()=>{if(moving)persist();});
+const myItems=createMyItemsUI({content:$('#panel-content'),title:$('#panel-title'),toast,onDefault:()=>showPanel('add'),countInstances:id=>state.furniture.filter(f=>f.libraryItemId===id).length,onSaved:()=>render(),onPlace:f=>{if(state.furniture.length>=200){toast('此版本最多 200 件家具');return;}const next={...state,furniture:[...state.furniture,f]};if(!save(next)){toast('配置儲存失敗，未加入空間');return;}state=next;persist();select(f.id);toast('已放入一份物品，可沿用移動與旋轉');}});
+render();showPanel('add');if(matchMedia('(max-width:760px)').matches)closePanel();
+// 3D 載入失敗不阻擋 2D、家具編輯或本機保存。
+try{const {createScene}=await import('./scene.js');scene=createScene($('#three-view'),callbacks);ready3d=true;render(true);setMode(mode);scene.canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();setMode('2d');toast('3D 顯示暫停，已切換 2D；重新整理可重試');});}catch(error){console.error('3D initialization failed',error);setMode('2d');$('#mode3d').disabled=true;$('#modewalk').disabled=true;toast('此瀏覽器無法啟動 3D，2D 與保存仍可使用');}
+
+
+cloud=initCloud({getState:()=>state,setState:next=>{state=next;selected=null;setMoving(false);render(true);if(panel==='my-items'||panel==='objects'||panel==='edit')showPanel('objects');},status,isEditing:()=>moving||['INPUT','SELECT','TEXTAREA'].includes(document.activeElement?.tagName)});

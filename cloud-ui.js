@@ -1,0 +1,40 @@
+import {createEditorLock} from './cloud-lock.js';
+import {acceptLink,readSession,sendLink,verifyCode,signInPassword,signOut} from './cloud-api.js';
+import {createCloudSync} from './cloud-sync.js';
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+export function initCloud(options){
+ const button=document.querySelector('#cloud-button'),dialog=document.querySelector('#cloud-dialog');let sync,working=false,blocked=false;const editorLock=createEditorLock();
+ const freeze=value=>{document.querySelector('main').inert=value;document.querySelector('.toolbar').inert=value;document.querySelector('.segmented').inert=value;};
+ async function ensureEditor(){let acquired=false;try{acquired=await editorLock.acquire();}catch{}if(acquired){blocked=false;freeze(false);return;}blocked=true;freeze(true);dialog.innerHTML='<h2>另一個分頁正在編輯</h2><p>請先關閉同一瀏覽器的其他 App 分頁，再按下方重新開啟；若仍無法開啟，請更新瀏覽器。原配置與待同步資料都會保留。</p><button id=cloud-retry class=block-button>重新開啟</button>';dialog.querySelector('#cloud-retry').onclick=()=>location.reload();if(!dialog.open)dialog.showModal();throw Error('另一個分頁正在編輯');}
+ dialog.addEventListener('cancel',e=>{if(blocked||working)e.preventDefault();});
+ const q=s=>dialog.querySelector(s);
+ const message=(text,bad=false)=>{q('#cloud-message').textContent=text;q('#cloud-message').className=bad?'error':'inline-note';};
+ async function action(fn){if(working)return;working=true;dialog.querySelectorAll('button').forEach(b=>b.disabled=true);try{await fn();}catch(e){if(!blocked)message(e.message,true);}finally{working=false;dialog.querySelectorAll('button').forEach(b=>b.disabled=false);}}
+ function download(){const url=URL.createObjectURL(sync.backup()),a=document.createElement('a');a.href=url;a.download=`home-recovery-${Date.now()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+ function draw(){if(blocked)return;const user=readSession()?.user;button.textContent=user?(sync.active?'雲端配置':'選擇配置'):'雲端登入';
+  dialog.innerHTML=`<h2>我的雲端家</h2><p class="inline-note">專案：home-3d-planner<br>${user?esc(user.email):'登入同一個 Email，在電腦與手機使用同一份配置。'}</p><div id="cloud-body"></div><p id="cloud-message" role="status"></p><button id="cloud-close" class="block-button">返回配置</button>`;
+  q('#cloud-close').onclick=()=>dialog.close();const body=q('#cloud-body');
+  if(!user){body.innerHTML=`<form id="cloud-login"><label>Email<input name="email" type="email" autocomplete="email" required placeholder="你的 Email"></label><button class="primary block-button">寄送登入信</button></form><p class="inline-note">點擊信中的登入連結。若信件提供驗證碼，也可在下方輸入。登入不會自動上傳本機資料。</p><form id="cloud-verify"><label>驗證碼<input name="token" inputmode="numeric" autocomplete="one-time-code" required minlength="6" maxlength="10"></label><button class="block-button">驗證登入</button></form><details><summary>使用已設定的密碼登入</summary><form id="cloud-password"><label>密碼<input name="password" type="password" autocomplete="current-password" required></label><button class="primary block-button">使用密碼登入</button></form><p class="inline-note">僅供已在 Authentication 建立密碼的帳號。不會把密碼保存在此瀏覽器。</p></details>`;
+   q('#cloud-login').onsubmit=e=>{e.preventDefault();action(async()=>{await sendLink(q('[name=email]').value.trim());message('登入信已寄出，請到信箱開啟；60 秒內請勿重複寄送。');});};
+   q('#cloud-password').onsubmit=e=>{e.preventDefault();action(async()=>{const input=q('[name=password]'),password=input.value;input.value='';await signInPassword(q('[name=email]').value.trim(),password);draw();await inspect();});};
+   q('#cloud-verify').onsubmit=e=>{e.preventDefault();action(async()=>{await verifyCode(q('[name=email]').value.trim(),q('[name=token]').value.trim());draw();await inspect();});};
+  }else if(sync.active){body.innerHTML=`<p>目前使用雲端配置。修改會自動同步；回到頁面時取得最新配置。</p><button id="cloud-refresh" class="primary block-button">立即同步</button><button id="cloud-backup" class="block-button">匯出配置救援備份</button><label class="block-button">將救援備份還原成新增副本<input id="cloud-restore" type="file" accept=".json"></label><p class="inline-note">保留目前家具與配色；圖片／模型須仍存在雲端。</p><button id="cloud-cleanup" class="block-button">檢查可清理的雲端檔案</button><div id="cloud-cleanup-result"></div>${sync.conflict?'<p class="error">另一個裝置修改了相同紀錄。目前修改仍保存在此裝置；可先匯出備份，再載入雲端版本。</p><button id="cloud-resolve" class="block-button">保留本機備份，改用雲端版本</button>':''}<button id="cloud-logout" class="block-button">登出，回到原本本機配置</button>`;
+   q('#cloud-refresh').onclick=()=>action(async()=>{await sync.flush();await sync.refresh();message('同步檢查完成；請查看上方儲存狀態。');});q('#cloud-backup').onclick=download;
+   q('#cloud-restore').onchange=e=>{const file=e.target.files[0];if(file)action(async()=>{const n=await sync.restoreBackup(file);message(`已新增 ${n} 件家具副本，正在同步；原配置保留。`);});};
+   q('#cloud-cleanup').onclick=()=>action(async()=>{const files=await sync.cleanupAssets();q('#cloud-cleanup-result').innerHTML=files.length?`<p class=inline-note>找到 ${files.length} 個超過 30 天且未被使用的檔案。永久清除後無法還原；仍有引用或近期刪除的圖片／模型會保留。</p><button id=cloud-cleanup-confirm class=block-button>確認永久清除這 ${files.length} 個檔案</button>`:'<p class=inline-note>目前沒有符合條件的檔案。使用中的檔案與近 30 天資產會保留。</p>';if(q('#cloud-cleanup-confirm'))q('#cloud-cleanup-confirm').onclick=()=>action(async()=>{const removed=await sync.cleanupAssets(true);q('#cloud-cleanup-result').textContent=`已重新檢查並清理 ${removed.length} 個檔案。`;});});if(q('#cloud-resolve'))q('#cloud-resolve').onclick=()=>action(async()=>{await sync.resolveCloud();draw();});
+   q('#cloud-logout').onclick=()=>action(async()=>{if(sync.pending)throw Error('仍有待同步修改，請先同步或處理衝突；尚未登出。');await signOut();sync.stop();location.reload();});
+  }else{body.innerHTML=`<p id="cloud-summary">正在檢查雲端配置…</p><button id="cloud-load" class="primary block-button" hidden>使用雲端配置（保留原本本機資料）</button><button id="cloud-migrate" class="primary block-button" hidden>將目前本機資料上傳到雲端</button><button id="cloud-check" class="block-button">重新檢查</button><button id="cloud-logout" class="block-button">登出</button>`;
+   q('#cloud-load').onclick=()=>action(async()=>{await ensureEditor();await sync.useCloud();draw();message('已載入雲端配置，原本本機資料仍保留。');});q('#cloud-migrate').onclick=()=>action(async()=>{await ensureEditor();await sync.migrate();draw();message('遷移完成；舊本機資料未刪除。');});q('#cloud-check').onclick=()=>action(inspect);q('#cloud-logout').onclick=()=>action(async()=>{await signOut();sync.stop();location.reload();});
+  }
+ }
+ async function inspect(){try{const info=await sync.inspect();if(!q('#cloud-summary'))return;q('#cloud-summary').textContent=info?`雲端已有 ${info.count} 件家具、${info.items} 件物品。本機資料不會自動覆蓋它。`:'雲端尚無配置。上傳包含家具、配色、物品庫、圖片與模型，成功後才切換雲端。';q('#cloud-load').hidden=!info;q('#cloud-migrate').hidden=!!info;}catch(e){message('無法檢查雲端：'+e.message,true);}}
+ sync=createCloudSync({...options,changed:()=>{button.textContent=sync.active?'雲端配置':'雲端登入';}});
+ button.onclick=()=>{if(blocked){if(!dialog.open)dialog.showModal();return;}draw();dialog.showModal();if(readSession()&&!sync.active)inspect();};
+ window.addEventListener('online',()=>sync.refresh());window.addEventListener('focus',()=>sync.refresh());document.addEventListener('visibilitychange',()=>{if(!document.hidden)sync.refresh();});
+ window.addEventListener('storage',e=>{if(e.key?.startsWith('home-cloud:session:')){const previous=JSON.parse(e.oldValue||'null')?.user?.id,next=JSON.parse(e.newValue||'null')?.user?.id;if(previous!==next){freeze(true);options.status('登入帳號已變更，請重新整理',true);}}});
+ window.addEventListener('beforeunload',e=>{if(sync.pending){e.preventDefault();e.returnValue='';}});
+ // Web Locks releases automatically when this document is destroyed.
+ window.addEventListener('pageshow',e=>{if(e.persisted)location.reload();});
+ (async()=>{freeze(true);try{await acceptLink();draw();if(readSession()){await ensureEditor();if(!await sync.resume()){dialog.showModal();await inspect();}}}catch(e){options.status(blocked?'另一分頁正在編輯':'雲端暫時無法連線，本機資料保留',true);if(!blocked){draw();if(dialog.open)message(e.message,true);}}finally{if(!blocked)freeze(false);}})();
+ return sync;
+}
