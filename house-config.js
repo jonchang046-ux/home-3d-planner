@@ -1,5 +1,6 @@
 import {validateHouse} from './house-validation.js';
+import {openingsFor,wallPartsFor} from './house-geometry.js';
 export let houseConfig,allRooms;
 export function setHouse(config){validateHouse(config);houseConfig=config;allRooms=[...config.rooms,...config.balcony];}
-export function openings(wall){return [...houseConfig.doors.filter(o=>o.wall===wall.id).map(o=>({...o,kind:'door',bottom:0,top:houseConfig.defaults.doorHeight})),...houseConfig.windows.filter(o=>o.wall===wall.id).map(o=>({...o,kind:'window',bottom:houseConfig.defaults.windowSill,top:houseConfig.defaults.windowSill+houseConfig.defaults.windowHeight}))].sort((a,b)=>a.offset-b.offset);}
-export function wallParts(wall){const length=Math.hypot(wall.b[0]-wall.a[0],wall.b[1]-wall.a[1]);const height=wall.height??houseConfig.defaults.wallHeight,parts=[];let cursor=0;for(const o of openings(wall)){if(o.offset>cursor)parts.push({start:cursor,length:o.offset-cursor,bottom:0,height});if(o.bottom>0)parts.push({start:o.offset,length:o.width,bottom:0,height:o.bottom});if(o.top<height)parts.push({start:o.offset,length:o.width,bottom:o.top,height:height-o.top});cursor=o.offset+o.width;}if(cursor<length)parts.push({start:cursor,length:length-cursor,bottom:0,height});return parts;}
+export function openings(wall){return openingsFor(houseConfig,wall);}
+export function wallParts(wall){return wallPartsFor(houseConfig,wall);}

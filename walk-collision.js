@@ -1,5 +1,6 @@
 // 純幾何運算：牆段直接使用渲染器同一個 wallParts，沒有第二套格局。
-import {houseConfig,allRooms,wallParts} from './house-config.js';
+import {houseConfig,allRooms} from './house-config.js';
+import {wallPartsFor} from './house-geometry.js';
 export const WALK = Object.freeze({eyeHeight:1.64,bodyHeight:1.74,radius:.20,fov:70,speed:1.1,step:.04});
 export function insidePolygon(x,z,polygon){
   let inside=false;
@@ -18,7 +19,7 @@ export function createCollision(furniture=[],house=houseConfig,rooms=allRooms){
   for(const wall of house.walls){
     const dx=wall.b[0]-wall.a[0],dz=wall.b[1]-wall.a[1],length=Math.hypot(dx,dz),cos=dx/length,sin=dz/length;
     // 門楣高於人的頭頂，不封住門洞；窗下牆與陽台矮牆仍阻擋。
-    for(const p of wallParts(wall))if(p.bottom<WALK.bodyHeight&&p.bottom+p.height>.05){
+    for(const p of wallPartsFor(house,wall))if(p.bottom<WALK.bodyHeight&&p.bottom+p.height>.05){
       const t=p.start+p.length/2;obstacles.push({id:wall.id,x:wall.a[0]+cos*t,z:wall.a[1]+sin*t,hx:p.length/2,hz:house.defaults.wallThickness/2,cos,sin});
     }
   }
