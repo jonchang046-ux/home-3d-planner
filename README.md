@@ -1,7 +1,7 @@
 # 正式網站部署說明
 
-目前尚未部署。候選專用 repository：`jonchang046-ux/home-3d-planner`。
-候選網址：`https://jonchang046-ux.github.io/home-3d-planner/`，未上線前不可當作可用網址。
+已部署至專用 repository：`jonchang046-ux/home-3d-planner`。
+正式網址：https://jonchang046-ux.github.io/home-3d-planner/ 。2026-10-01 已確認 HTTP 200、私人登入入口及電腦／手機尺寸登入畫面；真實帳號與實體 iPhone 雙向同步尚待驗收。
 
 ## 私人格局部署版（2026-10-01）
 
@@ -39,3 +39,4 @@ GitHub Pages 靜態網站會提供 HTML、CSS、JavaScript 及 Three.js 檔案�
 網站不需新增套件。以 `node work/prepare-home-release.mjs` 重新整理私人部署包（不是直接複製本機版），核對格局排除檢查後再上傳。保持相同網址及 Supabase 專案即可沿用雲端資料。回復程式只能使用私人部署包，不能回復到公開格局的舊包；不要刪除資料表或重跑 `001_initial.sql`。私人尺寸更新需另更新 `planner_geometry`，公開程式不附帶它。
 
 若更換正式網域，先加入新 Auth 回跳網址再切換。不同網址的本機儲存各自獨立，私人雲端配置仍依相同帳號載入。
+
