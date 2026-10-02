@@ -13,23 +13,26 @@ export async function request(path,{method='GET',body,auth=true,blob=false,heade
  if(blob)return r.blob();if(r.status===204)return null;const text=await r.text();return text?JSON.parse(text):null;
 }
 export async function session(){let s=readSession();if(!s)return null;if(s.expires_at*1000>Date.now()+60000)return s;
- if(!refreshing){const refresh=async()=>{const latest=readSession();if(!latest)return null;if(latest.expires_at*1000>Date.now()+60000)return latest;return storeSession(await request('/auth/v1/token?grant_type=refresh_token',{method:'POST',auth:false,body:{refresh_token:latest.refresh_token}}));};refreshing=(navigator.locks?navigator.locks.request(SESSION,refresh):refresh()).finally(()=>{refreshing=null;});}return refreshing;
+ if(!refreshing){const refresh=async()=>{const latest=readSession();if(!latest)return null;if(latest.expires_at*1000>Date.now()+60000)return latest;return cloudStage('session_refresh',async()=>storeSession(await request('/auth/v1/token?grant_type=refresh_token',{method:'POST',auth:false,body:{refresh_token:latest.refresh_token}})));};refreshing=(navigator.locks?navigator.locks.request(SESSION,refresh):refresh()).finally(()=>{refreshing=null;});}return refreshing;
 }
-export async function sendLink(email){return request('/auth/v1/otp?redirect_to='+encodeURIComponent(location.origin+location.pathname),{method:'POST',auth:false,body:{email,create_user:false}});}
-export async function signInPassword(email,password){return storeSession(await request('/auth/v1/token?grant_type=password',{method:'POST',auth:false,body:{email,password}}));}
-export async function verifyCode(email,token){return storeSession(await request('/auth/v1/verify',{method:'POST',auth:false,body:{email,token,type:'email'}}));}
-export async function acceptLink(){const p=new URLSearchParams(location.hash.slice(1));if(p.get('error_description')){history.replaceState(null,'',location.pathname+location.search);throw Error(p.get('error_description'));}if(!p.has('access_token'))return;
+export function loginRedirect(){const path=location.pathname.replace(/index\.html$/,'');return location.origin+(path.endsWith('/')?path:path+'/');}
+// Never log request bodies, credentials, tokens or private geometry.
+export async function cloudStage(stage,fn){try{const result=await fn();console.info('[home-cloud]',stage,'ok');return result;}catch(e){console.warn('[home-cloud]',stage,{status:e.status??null,code:e.code??null});throw e;}}
+export async function sendLink(email){return cloudStage('otp_send',()=>request('/auth/v1/otp?redirect_to='+encodeURIComponent(loginRedirect()),{method:'POST',auth:false,body:{email,create_user:false}}));}
+export async function signInPassword(email,password){return cloudStage('password_auth',async()=>storeSession(await request('/auth/v1/token?grant_type=password',{method:'POST',auth:false,body:{email,password}})));}
+export async function verifyCode(email,token){return cloudStage('otp_verify',async()=>storeSession(await request('/auth/v1/verify',{method:'POST',auth:false,body:{email,token,type:'email'}})));}
+export async function acceptLink(){const p=new URLSearchParams(location.hash.slice(1));if(p.get('error_description')){console.warn('[home-cloud]','auth_callback_rejected');history.replaceState(null,'',location.pathname+location.search);throw Error(p.get('error_description'));}if(!p.has('access_token'))return;
  const token=p.get('access_token'),refresh=p.get('refresh_token');history.replaceState(null,'',location.pathname+location.search);
- const user=await request('/auth/v1/user',{auth:false,headers:{Authorization:`Bearer ${token}`}});
+ const user=await cloudStage('auth_callback',()=>request('/auth/v1/user',{auth:false,headers:{Authorization:`Bearer ${token}`}}));
  storeSession({access_token:token,refresh_token:refresh,user,expires_in:Number(p.get('expires_in')||3600)});
 }
 export async function signOut(){try{await request('/auth/v1/logout?scope=local',{method:'POST'});}catch{/* Local sign-out still completes when offline. */}finally{clearSession();}}
-export async function readRows(kind){const rows=[];for(let offset=0;;offset+=500){const page=await request(`/rest/v1/planner_${kind}?select=*&order=id&limit=500&offset=${offset}`);rows.push(...page);if(page.length<500)return rows;if(offset>100000)throw Error('雲端紀錄超過此版本讀取上限');}}
-export const writeRows=(home,changes,create=false)=>request('/rest/v1/rpc/planner_write',{method:'POST',body:{p_home:home,p_changes:changes,p_create:create}});
-export async function uploadAsset(asset,owner){const path=`${owner}/${asset.id}`;
- try{await request(`/storage/v1/object/${config.bucket}/${path}`,{method:'POST',body:asset.blob,headers:{'Content-Type':asset.mime||'application/octet-stream'}});}catch(e){if(!['Duplicate','23505'].includes(e.code)&&e.status!==409)throw e;}
+export async function readRows(kind){const rows=[];for(let offset=0;;offset+=500){const page=await cloudStage('database_read_'+kind,()=>request(`/rest/v1/planner_${kind}?select=*&order=id&limit=500&offset=${offset}`));rows.push(...page);if(page.length<500)return rows;if(offset>100000)throw Error('雲端紀錄超過此版本讀取上限');}}
+export const writeRows=(home,changes,create=false)=>cloudStage('database_write',()=>request('/rest/v1/rpc/planner_write',{method:'POST',body:{p_home:home,p_changes:changes,p_create:create}}));
+export async function uploadAsset(asset,owner,home){const path=home?`homes/${home}/${asset.id}`:`${owner}/${asset.id}`;
+ try{await cloudStage('storage_upload',()=>request(`/storage/v1/object/${config.bucket}/${path}`,{method:'POST',body:asset.blob,headers:{'Content-Type':asset.mime||'application/octet-stream'}}));}catch(e){if(!['Duplicate','23505'].includes(e.code)&&e.status!==409)throw e;}
  return {id:asset.id,name:asset.name,kind:asset.kind,mime:asset.mime,path,size:asset.blob.size};
 }
-export const downloadAsset=meta=>request(`/storage/v1/object/authenticated/${config.bucket}/${meta.path}`,{blob:true});
-export const unusedAssets=(retire=false)=>request('/rest/v1/rpc/planner_unused_assets',{method:'POST',body:{p_retire:retire}});
+export const downloadAsset=meta=>cloudStage('storage_download',()=>request(`/storage/v1/object/authenticated/${config.bucket}/${meta.path}`,{blob:true}));
+export const unusedAssets=(retire=false,home)=>request('/rest/v1/rpc/'+(home?'planner_unused_assets_for_home':'planner_unused_assets'),{method:'POST',body:{p_retire:retire,...(home?{p_home:home}:{})}});
 export const deleteUnusedAssets=paths=>request(`/storage/v1/object/${config.bucket}`,{method:'DELETE',body:{prefixes:paths}});

@@ -1,4 +1,4 @@
-import {acceptLink,readSession,session,request,sendLink,verifyCode,signInPassword,signOut} from './cloud-api.js';
+import {acceptLink,readSession,session,request,sendLink,verifyCode,signInPassword,signOut,cloudStage} from './cloud-api.js';
 import {setHouse} from './house-config.js';
 const dialog=document.querySelector('#cloud-dialog');let busy=false,started=false;
 const freeze=()=>{document.querySelector('main').inert=true;document.querySelector('.toolbar').inert=true;document.querySelector('.segmented').inert=true;};freeze();
@@ -12,5 +12,12 @@ function gate(){dialog.innerHTML='<h2>登入我的家</h2><p class="inline-note"
  dialog.addEventListener('cancel',e=>{if(!started)e.preventDefault();});if(!dialog.open)dialog.showModal();
  document.querySelector('#cloud-button').onclick=()=>{if(!dialog.open)dialog.showModal();};
 }
-async function start(){if(started)return;const current=await session();if(!current)throw Error('請先登入');const rows=await request('/rest/v1/planner_geometry?select=home_id,config&limit=2');if(rows?.length!==1)throw Error('尚未設定私人格局，請先在原本電腦的本機版完成上傳。');if(readSession()?.user?.id!==current.user.id)throw Error('帳號已變更，請重新整理');setHouse(rows[0].config);await import('./app.js');started=true;if(dialog.open)dialog.close();}
+async function start(){if(started)return;const current=await cloudStage('session_established',session);if(!current){console.warn('[home-cloud]','session_missing');throw Error('請先登入');}
+ const homes=await cloudStage('home_read',()=>request('/rest/v1/planner_homes?select=id,owner_id,name'));
+ if(!homes.length){console.warn('[home-cloud]','membership_missing');throw Error('登入成功，但帳號尚未加入共享的家。請由屋主確認成員權限；不需要重新建立空白房屋。');}
+ const rows=await cloudStage('geometry_read',()=>request('/rest/v1/planner_geometry?select=home_id,config'));
+ const allowed=rows.filter(r=>homes.some(h=>h.id===r.home_id)),key=`home-cloud:selected-home:${current.user.id}`,selected=localStorage.getItem(key);
+ const geometry=allowed.find(r=>r.home_id===selected)??(allowed.length===1?allowed[0]:null);
+ if(!geometry)throw Error(allowed.length>1?'帳號可使用多個私人格局，請先確認目前要使用的家。':'登入成功且已取得房屋權限，但私人格局尚未載入；請確認格局資料與讀取權限。');
+ if(readSession()?.user?.id!==current.user.id)throw Error('帳號已變更，請重新整理');setHouse(geometry.config);localStorage.setItem(key,geometry.home_id);if(dialog.open)dialog.close();await import('./app.js');started=true;}
 gate();try{await acceptLink();if(readSession())await start();}catch(e){document.querySelector('#private-message').textContent=e.message;}

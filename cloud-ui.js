@@ -35,6 +35,6 @@ export function initCloud(options){
  window.addEventListener('beforeunload',e=>{if(sync.pending){e.preventDefault();e.returnValue='';}});
  // Web Locks releases automatically when this document is destroyed.
  window.addEventListener('pageshow',e=>{if(e.persisted)location.reload();});
- (async()=>{freeze(true);try{await acceptLink();draw();if(readSession()){await ensureEditor();if(!await sync.resume()){dialog.showModal();await inspect();}}}catch(e){options.status(blocked?'另一分頁正在編輯':'雲端暫時無法連線，本機資料保留',true);if(!blocked){draw();if(dialog.open)message(e.message,true);}}finally{if(!blocked)freeze(false);}})();
+ (async()=>{freeze(true);try{await acceptLink();draw();if(readSession()){await ensureEditor();if(!await sync.resume()){if(localStorage.getItem(`home-cloud:selected-home:${readSession().user.id}`)){await sync.inspect();await sync.useCloud();draw();}else{dialog.showModal();await inspect();}}}}catch(e){options.status(blocked?'另一分頁正在編輯':'雲端暫時無法連線，本機資料保留',true);if(!blocked){draw();if(!dialog.open)dialog.showModal();message(e.message,true);}}finally{if(!blocked)freeze(false);}})();
  return sync;
 }
