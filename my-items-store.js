@@ -5,6 +5,8 @@ async function read(store,key){const d=await db();return new Promise((resolve,re
 async function assetIds(){const d=await db();return new Promise((resolve,reject)=>{const r=d.transaction('assets').objectStore('assets').getAllKeys();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
 async function write(action){const d=await db();return new Promise((resolve,reject)=>{const t=d.transaction(['items','assets'],'readwrite');t.oncomplete=()=>resolve();t.onerror=()=>reject(t.error);t.onabort=()=>reject(t.error??Error('儲存已取消'));try{action(t);}catch(e){t.abort();reject(e);}});}
 let cloudStore=null;
+let retainedAssets=()=>new Set();
+export const setRetainedAssets=reader=>{retainedAssets=reader;};
 export const setCloudStore=store=>{cloudStore=store;};
 export const localItems=()=>read('items');
 export const localAsset=id=>read('assets',id);
@@ -16,7 +18,7 @@ export async function collectAssets(){
   if(cloudStore)return;
   // 場景仍有快照使用模型時保留 binary；不以目前面板快取判斷。
   let scene;try{scene=JSON.parse(localStorage.getItem('my-home-studio:v1')??'{"furniture":[]}');if(!Array.isArray(scene.furniture))return;}catch{return;}
-  const items=await listItems(),used=new Set(items.flatMap(referencedAssets));for(const f of scene.furniture)if(f.model?.assetId)used.add(f.model.assetId);
+  const items=await listItems(),used=new Set([...items.flatMap(referencedAssets),...retainedAssets()]);for(const f of scene.furniture)if(f.model?.assetId)used.add(f.model.assetId);
   const unused=(await assetIds()).filter(id=>!used.has(id));if(unused.length)await write(t=>unused.forEach(id=>t.objectStore('assets').delete(id)));
 }
 export async function imageAsset(file){if(!['image/jpeg','image/png','image/webp'].includes(file.type))throw Error('圖片請使用 JPG、PNG 或 WebP');if(file.size>20*1024*1024)throw Error('單張原圖請小於 20 MB');let bitmap;try{bitmap=await createImageBitmap(file);const scale=Math.min(1,1600/Math.max(bitmap.width,bitmap.height)),c=document.createElement('canvas');c.width=Math.max(1,Math.round(bitmap.width*scale));c.height=Math.max(1,Math.round(bitmap.height*scale));const ctx=c.getContext('2d');ctx.fillStyle='#ffffff';ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(bitmap,0,0,c.width,c.height);const blob=await new Promise(resolve=>c.toBlob(resolve,'image/jpeg',.85));if(!blob)throw Error('圖片轉換失敗');return {id:uid(),kind:'image',name:file.name,mime:blob.type,blob};}finally{bitmap?.close();}}

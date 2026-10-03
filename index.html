@@ -23,6 +23,8 @@
       <div class="walk-crosshair" aria-hidden="true">·</div>
     </div>
     <div class="floating-tools"><button id="reset-view" title="重設視角" aria-label="重設視角">⌂</button><button id="top-view" title="俯視視角" aria-label="俯視視角">▦</button><button id="zoom-in" title="放大" aria-label="放大">＋</button><button id="zoom-out" title="縮小" aria-label="縮小">−</button></div>
+    <div class="editing-actions" aria-label="修改紀錄"><button id="undo" aria-label="復原" title="復原 Ctrl+Z" disabled>↶</button><button id="redo" aria-label="重做" title="重做 Ctrl+Y" disabled>↷</button></div>
+    <div id="measurement-controls" hidden><div class="measurement-result"><strong id="measurement-value" role="status">點選第一個位置</strong><button id="measure-clear">重測</button><button id="measure-close">完成</button></div><p id="measurement-note">平面距離 · 自動吸附牆面與家具邊緣</p><div class="measurement-axis" role="group" aria-label="測量方向"><button data-measure-axis="free" aria-pressed="true">自由</button><button data-measure-axis="x" aria-pressed="false">水平</button><button data-measure-axis="z" aria-pressed="false">垂直</button><small>電腦可按住 Shift 鎖軸</small></div></div>
     <button class="assumption-chip" data-panel="info">◉ 格局含推算值 <span>查看依據 ↗</span></button>
     <div class="view-hint" id="view-hint">單指／左鍵旋轉 · 雙指縮放平移</div>
     <div id="move-banner" hidden>移動模式 · 拖曳選取家具，或用下方按鈕微調 <button id="finish-move">完成</button></div>
@@ -32,7 +34,7 @@
     <div id="panel-content"></div>
   </aside>
 </main>
-<nav class="toolbar" aria-label="工具列"><button data-panel="add" class="active"><span>＋</span>家具</button><button data-panel="colors"><span>◐</span>配色</button><button data-panel="view"><span>◇</span>視角</button><button data-panel="objects"><span>▤</span>物件 <small id="object-count"></small></button></nav>
+<nav class="toolbar" aria-label="工具列"><button data-panel="add" class="active"><span>＋</span>家具</button><button data-panel="colors"><span>◐</span>配色</button><button id="measure-toggle" aria-pressed="false"><span>↔</span>測量</button><button data-panel="view"><span>◇</span>視角</button><button data-panel="objects"><span>▤</span>物件 <small id="object-count"></small></button></nav>
 <div id="toast" role="status" aria-live="polite"></div>
 <dialog id="reset-dialog"><h2>恢復預設配置？</h2><p>目前的家具與配色將被替換為示範配置。</p><div class="button-row"><button id="cancel-reset">保留目前配置</button><button id="confirm-reset" class="danger">恢復預設</button></div></dialog>
 <dialog id="cloud-dialog" aria-label="我的雲端家"></dialog>
