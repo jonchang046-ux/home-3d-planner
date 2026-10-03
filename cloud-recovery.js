@@ -7,6 +7,6 @@ export function recoveryCopies(data,owner,home,current,makeId=()=>crypto.randomU
  if(!fs.every(f=>validFurniture(f)&&(!f.model||validModel(f.model)))||!items.every(validItem))throw Error('備份有無效尺寸或模型設定');
  const available=new Set(current.assets.map(a=>a.id));
  if([...fs,...items].flatMap(referencedAssets).some(id=>!available.has(id)))throw Error('備份包含雲端已清除或尚未上傳的圖片／模型；請先匯入含 binary 的 My Items 完整備份');
- const ids=new Map(items.map(i=>[i.id,makeId()]));
- return {items:items.map(i=>({...structuredClone(i),id:ids.get(i.id),name:(i.name+'（還原）').slice(0,60),updatedAt:new Date().toISOString()})),furniture:fs.map(f=>({...structuredClone(f),id:makeId(),name:(f.name+'（還原）').slice(0,60),...(ids.has(f.libraryItemId)?{libraryItemId:ids.get(f.libraryItemId)}:{})}))};
+ const ids=new Map(items.map(i=>[i.id,makeId()])),fids=new Map(fs.map(f=>[f.id,makeId()]));
+ return {items:items.map(i=>({...structuredClone(i),id:ids.get(i.id),name:(i.name+'（還原）').slice(0,60),updatedAt:new Date().toISOString()})),furniture:fs.map(f=>({...structuredClone(f),id:fids.get(f.id),...(f.supportParentId?{supportParentId:fids.get(f.supportParentId)??null}:{}),name:(f.name+'（還原）').slice(0,60),...(ids.has(f.libraryItemId)?{libraryItemId:ids.get(f.libraryItemId)}:{})}))};
 }

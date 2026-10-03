@@ -1,3 +1,5 @@
+import {elevation} from './placement-data.js';
+import {createStructures} from './structure-factory.js';
 import {templateFor,fittedModel,disposeModel,pruneModelCache} from './item-models.js';
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
@@ -41,12 +43,12 @@ export function createScene(container,{onSelect,onMove,onMoveStart=()=>{},onMove
       }
     }
     const st=house.stairs;for(let i=0;i<st.steps;i++){const d=st.depth/st.steps;box(building,st.width,(i+1)*st.rise,d,st.x+st.width/2,(i+1)*st.rise/2,st.z+i*d+d/2,'#c0c5b7');}
-    labels.visible=showLabels&&!walking;ceiling.visible=walking;
+    building.add(createStructures(house,{walking,cutaway:lowWalls}));labels.visible=showLabels&&!walking;ceiling.visible=walking;
   }
   const failedAssets=new Set();
-  const modelKey=f=>JSON.stringify([f.type,f.width,f.depth,f.height,f.color,f.model]);
+  const modelKey=f=>JSON.stringify([f.type,f.width,f.depth,f.height,f.color,f.model,f.wardrobe,f.kitchen]);
   function makeFurniture(f,reused){const g=reused??createFurnitureModel(f),w=f.width/100,d=f.depth/100;
-    g.position.set(f.x,0,f.z);g.rotation.y=-THREE.MathUtils.degToRad(f.rotation);furnishings.add(g);
+    g.position.set(f.x,elevation(f),f.z);g.rotation.y=-THREE.MathUtils.degToRad(f.rotation);furnishings.add(g);
     g.userData.modelKey=modelKey(f);
     if(f.model?.assetId&&!reused){const fallback=g.children[0];g.userData.modelStatus='loading';templateFor(f.model.assetId,f.model.kind).then(template=>{if(g.parent!==furnishings)return;const model=fittedModel(template,f);g.remove(fallback);disposeModel(fallback);g.add(model);g.userData.modelStatus='loaded';}).catch(error=>{if(g.parent!==furnishings)return;g.userData.modelStatus='fallback';if(!failedAssets.has(f.model.assetId)){failedAssets.add(f.model.assetId);onAssetError(error.message+'；保留原尺寸的簡化外觀');}});}
     if(f.id===selected){const points=[[-w/2,-d/2],[w/2,-d/2],[w/2,d/2],[-w/2,d/2],[-w/2,-d/2]].map(([x,z])=>new THREE.Vector3(x,.025,z));const edge=new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),new THREE.LineBasicMaterial({color:'#d57627',depthTest:false}));edge.renderOrder=5;edge.userData.editorOnly=true;edge.visible=!walking;g.add(edge);const helper=new THREE.BoxHelper(g,0xd57627);helper.material.transparent=true;helper.material.opacity=.55;helper.userData.editorOnly=true;helper.visible=!walking;furnishings.add(helper);}
@@ -55,7 +57,7 @@ export function createScene(container,{onSelect,onMove,onMoveStart=()=>{},onMove
     const reusable=new Map(),byId=new Map(state.furniture.map(f=>[f.id,f]));for(const g of [...furnishings.children]){const f=byId.get(g.userData.furnitureId);if(f&&g.userData.modelKey===modelKey(f)){for(const child of [...g.children])if(child.userData.editorOnly){g.remove(child);disposeModel(child);}furnishings.remove(g);reusable.set(f.id,g);}}
     clear(furnishings);for(const f of state.furniture)makeFurniture(f,reusable.get(f.id));if(walking)walk.setFurniture(state.furniture);}
   function positionPointer(e){const r=renderer.domElement.getBoundingClientRect();pointer.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);ray.setFromCamera(pointer,camera);}
-  function groundPoint(e){positionPointer(e);return ray.ray.intersectPlane(ground,new THREE.Vector3());}
+  function groundPoint(e,y=0){positionPointer(e);ground.constant=-y;return ray.ray.intersectPlane(ground,new THREE.Vector3());}
   function pick(e){positionPointer(e);for(const hit of ray.intersectObjects(furnishings.children,true)){let o=hit.object;while(o&&!o.userData.furnitureId)o=o.parent;if(o)return o.userData.furnitureId;}return null;}
   function endPointer(e,cancel=false){if(walking||!down||down.pointer!==e.pointerId)return;const gesture=down;down=null;
     if(drag){drag=null;if(cancel)onMoveCancel();else if(gesture.moved)onMoveEnd(gesture.id);else{onMoveCancel();onSelect(gesture.id);}}
@@ -67,10 +69,10 @@ export function createScene(container,{onSelect,onMove,onMoveStart=()=>{},onMove
     if(down&&down.pointer!==e.pointerId){const old=down;endPointer({pointerId:old.pointer},true);return;}
     const measuring=getMeasurement().active,id=measuring?null:isMoving()?selected:pick(e);if(!id&&!measuring)return;
     down={x:e.clientX,y:e.clientY,id,pointer:e.pointerId,moved:false,measure:measuring};controls.enabled=false;e.preventDefault();e.stopImmediatePropagation();renderer.domElement.setPointerCapture(e.pointerId);
-    if(id){const p=groundPoint(e),f=state.furniture.find(f=>f.id===id);if(p&&f){onMoveStart(id);drag={id,dx:f.x-p.x,dz:f.z-p.z};}}
+    if(id){const f=state.furniture.find(f=>f.id===id),p=groundPoint(e,elevation(f));if(p&&f){onMoveStart(id);drag={id,dx:f.x-p.x,dz:f.z-p.z,y:elevation(f)};}}
   },true);
   renderer.domElement.addEventListener('pointermove',e=>{if(walking)return;if(down&&down.pointer!==e.pointerId)return;
-    const p=groundPoint(e);if(getMeasurement().active){if(p)onMeasurePreview({x:p.x,z:p.z},e.shiftKey);return;}
+    const p=groundPoint(e,drag?.y??0);if(getMeasurement().active){if(p)onMeasurePreview({x:p.x,z:p.z},e.shiftKey);return;}
     if(!drag||!p)return;if(!down.moved&&Math.hypot(e.clientX-down.x,e.clientY-down.y)<5)return;down.moved=true;onMove(drag.id,p.x+drag.dx,p.z+drag.dz);
   });
   renderer.domElement.addEventListener('pointerup',e=>endPointer(e));

@@ -1,3 +1,5 @@
+import {elevation} from './placement-data.js';
+import {actualSize} from './my-items-data.js';
 // 純幾何運算：牆段直接使用渲染器同一個 wallParts，沒有第二套格局。
 import {houseConfig,allRooms} from './house-config.js';
 import {wallPartsFor} from './house-geometry.js';
@@ -23,7 +25,7 @@ export function createCollision(furniture=[],house=houseConfig,rooms=allRooms){
       const t=p.start+p.length/2;obstacles.push({id:wall.id,x:wall.a[0]+cos*t,z:wall.a[1]+sin*t,hx:p.length/2,hz:house.defaults.wallThickness/2,cos,sin});
     }
   }
-  for(const f of furniture){const angle=f.rotation*Math.PI/180;obstacles.push({id:f.id,x:f.x,z:f.z,hx:f.width/200,hz:f.depth/200,cos:Math.cos(angle),sin:Math.sin(angle)});}
+  for(const f of furniture){if(elevation(f)>=WALK.bodyHeight||elevation(f)+actualSize(f)[1]<=.05)continue;const angle=f.rotation*Math.PI/180;obstacles.push({id:f.id,x:f.x,z:f.z,hx:f.width/200,hz:f.depth/200,cos:Math.cos(angle),sin:Math.sin(angle)});}
   const floors=rooms.filter(r=>r.kind!=='stairs');
   function onFloor(x,z){return floors.some(r=>insidePolygon(x,z,r.polygon));}
   function canStand(x,z,r=WALK.radius){

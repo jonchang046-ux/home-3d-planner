@@ -1,6 +1,7 @@
 import {houseConfig} from './house-config.js';
+import {validPlacement} from './placement-data.js';
 // 家具庫 V2：資料與尺寸只在此定義；geometry 在 furniture-factory.js。
-export const categories=[{id:'living',label:'客廳'},{id:'bedroom',label:'臥室'},{id:'study',label:'書房'},{id:'dining',label:'餐廚'},{id:'entry',label:'生活／玄關'},{id:'other',label:'其他'}];
+export const categories=[{id:'living',label:'客廳'},{id:'bedroom',label:'臥室'},{id:'study',label:'書房'},{id:'dining',label:'餐廚'},{id:'entry',label:'生活／玄關'},{id:'bathroom',label:'浴室設備'},{id:'kitchen',label:'廚房設備'},{id:'other',label:'其他'}];
 const item=(label,category,model,width,depth,height,color='#b29878',extra={})=>({label,category,model,width,depth,height,color,...extra});
 // 俯視 x/z 歸一化占地；L 型延伸在 +x 側，前方為 +z。
 export const L_FOOTPRINT=[[-.5,-.5],[.5,-.5],[.5,.5],[.1,.5],[.1,.05],[-.5,.05]];
@@ -34,8 +35,24 @@ export const catalog = {
   entryCabinet:item('玄關櫃','entry','entryCabinet',100,40,90),
   washer:item('洗衣機','entry','washer',60,60,85,'#d9ddda'),
   dryingRack:item('曬衣架','entry','dryingRack',120,55,150,'#82928e'),
+  toilet:item('馬桶','bathroom','toilet',38,68,76,'#ecece5',{objectKind:'fixture'}),
+  basin:item('獨立洗手台','bathroom','basin',55,45,85,'#ecece5',{objectKind:'fixture'}),
+  bathVanity:item('浴櫃＋洗手盆','bathroom','bathVanity',80,50,90,'#b7aa95',{objectKind:'fixture',note:'高度含水龍頭；檯面在整體高度的 80%。左右側檯面可承載小物。'}),
+  mirror:item('壁掛鏡子','bathroom','mirror',60,3,80,'#b5aa94',{objectKind:'fixture',mountType:'wall',y:1.1}),
+  shower:item('淋浴花灑','bathroom','shower',25,35,110,'#bec8c8',{objectKind:'fixture',mountType:'wall',y:1}),
+  showerScreen:item('玻璃淋浴隔間','bathroom','showerScreen',90,4,200,'#839b9d',{objectKind:'fixture'}),
+  modularWardrobe:item('頂天立地衣櫃','bedroom','modularWardrobe',180,60,270,'#d1c6b3',{objectKind:'fixture',wardrobe:{style:'multi',doorColor:'#d1c6b3'}}),
+  countertop:item('流理台下櫃','kitchen','countertop',180,60,85,'#c3b59d',{objectKind:'fixture',kitchen:{sink:false,burners:2}}),
+  hob:item('瓦斯爐','kitchen','hob',70,45,8,'#52595a',{objectKind:'fixture',kitchen:{sink:false,burners:2},note:'放入後可拖到完整包覆爐具外框的檯面，或指定支撐物。'}),
+  hood:item('抽油煙機','kitchen','hood',90,50,65,'#c0c7c7',{objectKind:'fixture',mountType:'wall',y:1.55}),
+  kitchenSink:item('檯上水槽','kitchen','kitchenSink',60,45,25,'#c2cbca',{objectKind:'fixture'}),
+  wallCabinet:item('廚房上櫃','kitchen','wallCabinet',90,35,70,'#c3b59d',{objectKind:'fixture',mountType:'wall',y:1.6}),
   custom:item('自訂物件','other','custom',30,30,60,'#a2b4a0',{note:'以真實尺寸的方盒表示；可命名為空氣清淨機等物品。'}),
 };
+const top=[{id:'top',x:0,z:0,w:1,d:1,h:1}];
+for(const type of ['tvCabinet','lowCabinet','nightstand','dresser','wardrobe','modularWardrobe','desk','table','coffeeTable','sideTable','sideboard','shoeCabinet','entryCabinet','bookcase','openShelf','countertop','wallCabinet'])catalog[type].support=top;
+catalog.lDesk.support=[{id:'back',x:0,z:-.225,w:1,d:.55,h:1},{id:'return',x:.3,z:.275,w:.4,d:.45,h:1}];
+catalog.bathVanity.support=[{id:'left',x:-.41,z:0,w:.18,d:1,h:.8},{id:'right',x:.41,z:0,w:.18,d:1,h:.8}];
 const legacyTypes={tv:'tvCabinet',cabinet:'wardrobe',storage:'wardrobe'};
 export function resolveType(type){return Object.hasOwn(catalog,type)?type:Object.hasOwn(legacyTypes,type)?legacyTypes[type]:'custom';}
 export function normalizeFurniture(f){
@@ -46,7 +63,7 @@ export function normalizeFurniture(f){
 export function footprint(f){return (catalog[resolveType(f.type)].footprint??[[-.5,-.5],[.5,-.5],[.5,.5],[-.5,.5]]).map(([x,z])=>[x*f.width/100,z*f.depth/100]);}
 export function newFurniture(type,overrides={}) {
   type=resolveType(type);const c=catalog[type];
-  return {id:globalThis.crypto?.randomUUID?.()??`f-${Date.now()}-${Math.random()}`,name:c.label,width:c.width,depth:c.depth,height:c.height,color:c.color,x:houseConfig.rooms.find(r=>r.kind==='living').label[0],z:houseConfig.rooms.find(r=>r.kind==='living').label[1],rotation:0,...overrides,type:resolveType(overrides.type??type)};
+  return {id:globalThis.crypto?.randomUUID?.()??`f-${Date.now()}-${Math.random()}`,name:c.label,width:c.width,depth:c.depth,height:c.height,color:c.color,x:houseConfig.rooms.find(r=>r.kind==='living').label[0],z:houseConfig.rooms.find(r=>r.kind==='living').label[1],rotation:0,y:c.y??0,mountType:c.mountType??'floor',objectKind:c.objectKind??'furniture',...(c.wardrobe?{wardrobe:{...c.wardrobe}}:{}),...(c.kitchen?{kitchen:{...c.kitchen}}:{}),...overrides,type:resolveType(overrides.type??type)};
 }
 export function defaults(){return structuredClone(houseConfig.defaultScene);}
-export function validFurniture(f){return f&&typeof f.id==='string'&&f.id.length<100&&Object.hasOwn(catalog,f.type)&&typeof f.name==='string'&&f.name.length>0&&f.name.length<=60&&/^#[0-9a-f]{6}$/i.test(f.color)&&['width','depth','height'].every(k=>Number.isFinite(f[k])&&f[k]>=10&&f[k]<=500)&&['x','z','rotation'].every(k=>Number.isFinite(f[k]))&&f.x>=-5&&f.x<=15&&f.z>=-5&&f.z<=20&&Math.abs(f.rotation)<=3600;}
+export function validFurniture(f){return f&&typeof f.id==='string'&&f.id.length<100&&Object.hasOwn(catalog,f.type)&&typeof f.name==='string'&&f.name.length>0&&f.name.length<=60&&/^#[0-9a-f]{6}$/i.test(f.color)&&['width','depth','height'].every(k=>Number.isFinite(f[k])&&f[k]>=1&&f[k]<=500)&&['x','z','rotation'].every(k=>Number.isFinite(f[k]))&&f.x>=-5&&f.x<=15&&f.z>=-5&&f.z<=20&&Math.abs(f.rotation)<=3600&&validPlacement(f);}

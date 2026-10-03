@@ -7,5 +7,6 @@ export function validateHouse(c){
  for(const r of [...c.rooms,...c.balcony])if(typeof r.id!=='string'||typeof r.name!=='string'||!Array.isArray(r.polygon)||r.polygon.length<3||!r.polygon.every(point)||!point(r.label))fail();
  for(const w of c.walls)if(typeof w.id!=='string'||!point(w.a)||!point(w.b))fail();
  for(const o of [...c.doors,...c.windows])if(!c.walls.some(w=>w.id===o.wall)||!number(o.offset)||!number(o.width)||o.offset<0||o.width<=0)fail();
+ if(c.structures!==undefined){if(!Array.isArray(c.structures)||c.structures.length>10)fail();for(const s of c.structures)if(s.kind!=='balconyCover'||![...c.rooms,...c.balcony].some(r=>r.id===s.roomId)||!number(s.roofThickness)||s.roofThickness<.01||s.roofThickness>.5||!number(s.barThickness)||s.barThickness<.005||s.barThickness>.1||!number(s.barSpacing)||s.barSpacing<.08||s.barSpacing>1||!/^#[a-f0-9]{6}$/i.test(s.color))fail();}
  return c;
 }

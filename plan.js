@@ -1,3 +1,6 @@
+import {fixtureSymbol} from './fixture-plan.js';
+import {elevation,mountType} from './placement-data.js';
+import {structureGeometry} from './structures.js';
 import {actualSize} from './my-items-data.js';
 import {catalog,resolveType,footprint} from './furniture.js';
 import {houseConfig as house,allRooms,wallParts,openings} from './house-config.js';
@@ -20,13 +23,15 @@ export function createPlan(svg,{onSelect,onMove,onMoveStart=()=>{},onMoveEnd,onM
     }
     const stairs=house.stairs;for(let i=0;i<stairs.steps;i++)svg.append(el('line',{x1:stairs.x,y1:stairs.z+i*stairs.depth/stairs.steps,x2:stairs.x+stairs.width,y2:stairs.z+i*stairs.depth/stairs.steps,stroke:'#9caa92','stroke-width':.035}));
     for(const room of allRooms){svg.append(el('text',{x:room.label[0],y:room.label[1],class:'plan-label'},room.name));svg.append(el('text',{x:room.label[0],y:room.label[1]+.18,class:'plan-label plan-hint'},room.hint));}
-    for(const f of s.furniture){const w=f.width/100,d=f.depth/100,g=el('g',{transform:`translate(${f.x},${f.z}) rotate(${f.rotation})`,class:'plan-furniture',tabindex:0,role:'button','aria-label':`選取 ${f.name}`,'data-id':f.id});
+    for(const structure of structureGeometry(house))svg.append(el('polygon',{points:structure.polygon.map(p=>p.join(',')).join(' '),fill:'none',stroke:'#526d73','stroke-width':.025,'stroke-dasharray':'.12 .08','pointer-events':'none'}));
+    for(const f of [...s.furniture].sort((a,b)=>elevation(a)-elevation(b))){const w=f.width/100,d=f.depth/100,g=el('g',{transform:`translate(${f.x},${f.z}) rotate(${f.rotation})`,class:'plan-furniture',tabindex:0,role:'button','aria-label':`選取 ${f.name}`,'data-id':f.id,'data-elevation':elevation(f),'data-mount':mountType(f)});g.append(el('title',{},`${f.name} · 底部離地 ${Number((elevation(f)*100).toFixed(1))} cm`));g.append(el('rect',{x:-Math.max(w,.25)/2,y:-Math.max(d,.25)/2,width:Math.max(w,.25),height:Math.max(d,.25),fill:'transparent',class:'furniture-hit'}));
       const def=catalog[resolveType(f.type)],attrs={class:'furniture-footprint',fill:f.color,'fill-opacity':f.model?.assetId ? .22 : 1,stroke:f.id===id?'#cc772d':'#617055','stroke-width':f.id===id?.055:.025};g.append(def.footprint?el('polygon',{...attrs,points:footprint(f).map(p=>p.join(',')).join(' ')}):el('rect',{...attrs,x:-w/2,y:-d/2,width:w,height:d,rx:Math.min(.045,w*.05,d*.05)}));
+      if(!f.model?.assetId&&fixtureSymbol(f)){const symbol=el('g',{class:'fixture-symbol',transform:`scale(${w},${d})`,fill:'none',stroke:'#344b47','stroke-width':.025,'pointer-events':'none'});symbol.innerHTML=fixtureSymbol(f);g.append(symbol);}
       if(!f.model?.assetId&&['bed','singleBed'].includes(def.model))g.append(el('rect',{x:-w*.42,y:-d*.42,width:w*.84,height:d*.2,rx:.04,fill:'#f6f1e6',opacity:.85}));
       if(!f.model?.assetId&&def.model==='sofa')g.append(el('path',{d:`M ${-w*.4} ${-d*.3} H ${w*.4} M 0 ${-d*.3} V ${d*.4}`,stroke:'#fff7','stroke-width':.04,fill:'none'}));
       if(f.model?.assetId){const a=actualSize(f);g.append(el('rect',{class:'model-footprint',x:-a[0]/2,y:-a[2]/2,width:a[0],height:a[2],fill:f.color,stroke:'#35553f','stroke-dasharray':'.06 .035','stroke-width':.025,'pointer-events':'none'}));}
       const frontX=def.footprint?w*.3:0;g.append(el('path',{d:`M ${frontX-w*.07} ${d*.4} L ${frontX} ${d*.47} L ${frontX+w*.07} ${d*.4}`,stroke:'#405440',opacity:.8,'stroke-width':.018,fill:'none','pointer-events':'none'}));
-      g.append(el('text',{x:0,y:d/2+.15,transform:`rotate(${-f.rotation},0,${d/2+.15})`},f.name));
+      g.append(el('text',{x:0,y:d/2+.15,transform:`rotate(${-f.rotation},0,${d/2+.15})`},f.name+(mountType(f)==='wall'?' · 壁掛':'')));
       g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onSelect(f.id);}});svg.append(g);
     }
     svg.append(el('line',{x1:0,y1:11.55,x2:1,y2:11.55,stroke:'#56674c','stroke-width':.025}));svg.append(el('text',{x:1.1,y:11.59,class:'measure'},'1 m · 比例示意'));

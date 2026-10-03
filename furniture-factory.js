@@ -1,3 +1,4 @@
+import {fixtureBuilders} from './fixture-factory.js';
 // 所有部件生成於 1 × 1 × 1 的一致外框，再整組以 cm → m 縮放。
 // 地面 y=0、最高點 y=1；前方 +z。沒有任何家具幾何留在 scene.js。
 import * as THREE from './vendor/three.module.js';
@@ -58,6 +59,7 @@ function vanity(a){const {b,legs,handle}=a;legs(.53);b('梳妝桌面',1,.04,1,0,
 function applianceCabinet(a){const {b,handle}=a;shelf(a,true);b('下櫃門片',.9,.22,.045,0,.155,.46);handle(0,.16);b('電器置物背板',.92,.95,.04,0,.5,-.48);b('上櫃門片',.9,.20,.045,0,.8675,.46);handle(0,.855);}
 function dryingRack({b}){for(const x of [-.44,.44]){b('立柱',.035,.96,.035,x,.52,0);b('落地橫腳',.09,.04,1,x,.02,0,'metal');}b('掛衣橫桿',1,.035,.035,0,.9825,0);b('底部連桿',.88,.025,.035,0,.15,0,'metal');for(const x of [-.18,.14]){b('衣架上橫條',.22,.018,.02,x,.87,0,'wood');const l=b('衣架斜桿',.02,.085,.02,x-.046,.909,0,'wood');l.rotation.z=-.7;const r=b('衣架斜桿',.02,.085,.02,x+.046,.909,0,'wood');r.rotation.z=.7;b('衣架掛鉤',.012,.034,.02,x,.96,0,'metal');}}
 const builders={
+  ...fixtureBuilders,
   bed:a=>bed(a),singleBed:a=>bed(a,true),sofa:(a,c)=>sofa(a,c.seats),lSofa:a=>sofa(a,2,true),lounge:a=>sofa(a,1),
   table:a=>table(a),desk:a=>table(a,{drawer:true}),coffee:a=>table(a,{shelf:true}),side:a=>table(a,{shelf:true}),lDesk,
   chair:a=>chair(a),officeChair:a=>chair(a,true),wardrobe:a=>cabinet(a,{base:0}),cabinet:a=>cabinet(a),
