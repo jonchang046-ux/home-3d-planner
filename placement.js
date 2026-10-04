@@ -3,6 +3,9 @@ import {actualSize} from './my-items-data.js';
 import {elevation,mountType} from './placement-data.js';
 export {elevation,mountType} from './placement-data.js';
 const EPS=1e-6,angle=r=>r*Math.PI/180,norm=r=>(r%360+360)%360;
+// Automatic dragging may lift an object onto an ordinary table, but never onto
+// an unrelated tall cabinet. Explicit parent selection bypasses this threshold.
+export const SUPPORT_SNAP_HEIGHT=.9;
 export const ceilingHeight=house=>house.ceilingHeight??house.defaults.wallHeight;
 export function localPoint(parent,x,z){const a=angle(parent.rotation),dx=x-parent.x,dz=z-parent.z;return {x:dx*Math.cos(a)+dz*Math.sin(a),z:-dx*Math.sin(a)+dz*Math.cos(a)};}
 export function worldPoint(parent,x,z){const a=angle(parent.rotation);return {x:parent.x+x*Math.cos(a)-z*Math.sin(a),z:parent.z+x*Math.sin(a)+z*Math.cos(a)};}
@@ -17,7 +20,7 @@ export function supportSurfaces(parent){const def=catalog[resolveType(parent.typ
 export function fitsSurface(child,parent,surface){const b=surface.bounds;return actualCorners(child).every(p=>{const q=localPoint(parent,p.x,p.z);return q.x>=b.minX-EPS&&q.x<=b.maxX+EPS&&q.z>=b.minZ-EPS&&q.z<=b.maxZ+EPS;});}
 export function descendants(items,id){const found=new Set();let pending=[id];while(pending.length){const next=pending.pop();for(const f of items)if(f.supportParentId===next&&f.id!==id&&!found.has(f.id)){found.add(f.id);pending.push(f.id);}}return found;}
 export function findSupport(child,items,house,preferred){const excluded=descendants(items,child.id);excluded.add(child.id);const matches=[];
- for(const parent of items){if(excluded.has(parent.id)||(preferred&&parent.id!==preferred))continue;for(const surface of supportSurfaces(parent))if(fitsSurface(child,parent,surface)&&surface.height+actualSize(child)[1]<=ceilingHeight(house)+EPS)matches.push({parent,surface});}
+ for(const parent of items){if(excluded.has(parent.id)||(preferred&&parent.id!==preferred))continue;for(const surface of supportSurfaces(parent))if((preferred||Math.abs(surface.height-elevation(child))<=SUPPORT_SNAP_HEIGHT+EPS)&&fitsSurface(child,parent,surface)&&surface.height+actualSize(child)[1]<=ceilingHeight(house)+EPS)matches.push({parent,surface});}
  return matches.sort((a,b)=>b.surface.height-a.surface.height)[0]??null;
 }
 export function detach(f,wall=false){delete f.supportParentId;delete f.supportOffset;delete f.supportSurfaceId;f.mountType=wall?'wall':'floor';if(!wall)f.y=0;}

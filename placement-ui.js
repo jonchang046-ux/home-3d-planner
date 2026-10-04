@@ -11,4 +11,10 @@ export function readPlacement(form,f){const d=new FormData(form),mount=d.get('mo
  if(f.type==='modularWardrobe')value.wardrobe={style:d.get('wardrobeStyle'),doorColor:d.get('doorColor')};
  if(['countertop','hob'].includes(f.type))value.kitchen={sink:d.has('kitchenSink'),burners:Number(d.get('burners')??f.kitchen?.burners??2)};return value;
 }
-export function wirePlacement(form,house){const button=form.querySelector('#fit-ceiling');if(button)button.onclick=()=>{form.elements.height.value=Math.max(1,Math.floor(ceilingHeight(house)*100-Number(form.elements.elevation.value)-1));};}
+export function wirePlacement(form,house){
+ const mode=form.elements.mountType,height=form.elements.elevation,parent=form.elements.supportParentId;
+ const note=document.createElement('p');note.className='inline-note';note.setAttribute('aria-live','polite');form.querySelector('.placement-settings').append(note);
+ const refresh=()=>{height.readOnly=mode.value!=='wall';height.setAttribute('aria-readonly',String(height.readOnly));parent.disabled=mode.value!=='surface';note.textContent=mode.value==='wall'?'設定底部離地高度；靠近牆面會以背面貼牆並保留高度。':mode.value==='surface'?'高度由支撐物自動計算，請選擇支撐物後套用。':'底部放在地板；拖曳可吸附高度差 90 cm 內的有效檯面，更高檯面請明確指定支撐物。';};
+ mode.addEventListener('change',refresh);refresh();
+ const button=form.querySelector('#fit-ceiling');if(button)button.onclick=()=>{form.elements.height.value=Math.max(1,Math.floor(ceilingHeight(house)*100-Number(height.value)-1));};
+}

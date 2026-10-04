@@ -1,7 +1,7 @@
 import {houseConfig} from './house-config.js';
 import {validPlacement} from './placement-data.js';
 // 家具庫 V2：資料與尺寸只在此定義；geometry 在 furniture-factory.js。
-export const categories=[{id:'living',label:'客廳'},{id:'bedroom',label:'臥室'},{id:'study',label:'書房'},{id:'dining',label:'餐廚'},{id:'entry',label:'生活／玄關'},{id:'bathroom',label:'浴室設備'},{id:'kitchen',label:'廚房設備'},{id:'other',label:'其他'}];
+export const categories=[{id:'living',label:'客廳'},{id:'bedroom',label:'臥室'},{id:'study',label:'書房'},{id:'dining',label:'餐廚'},{id:'entry',label:'生活／玄關'},{id:'bathroom',label:'浴室設備'},{id:'builtIn',label:'固定櫃體／衣櫃'},{id:'kitchen',label:'廚房設備'},{id:'other',label:'其他'}];
 const item=(label,category,model,width,depth,height,color='#b29878',extra={})=>({label,category,model,width,depth,height,color,...extra});
 // 俯視 x/z 歸一化占地；L 型延伸在 +x 側，前方為 +z。
 export const L_FOOTPRINT=[[-.5,-.5],[.5,-.5],[.5,.5],[.1,.5],[.1,.05],[-.5,.05]];
@@ -37,11 +37,12 @@ export const catalog = {
   dryingRack:item('曬衣架','entry','dryingRack',120,55,150,'#82928e'),
   toilet:item('馬桶','bathroom','toilet',38,68,76,'#ecece5',{objectKind:'fixture'}),
   basin:item('獨立洗手台','bathroom','basin',55,45,85,'#ecece5',{objectKind:'fixture'}),
+  wallBasin:item('壁掛洗手台','bathroom','wallBasin',55,45,24,'#ecece5',{objectKind:'fixture',mountType:'wall',y:.61,note:'預設底部離地 61 cm、整體高 24 cm，頂部約 85 cm；均為一般設備預設。'}),
   bathVanity:item('浴櫃＋洗手盆','bathroom','bathVanity',80,50,90,'#b7aa95',{objectKind:'fixture',note:'高度含水龍頭；檯面在整體高度的 80%。左右側檯面可承載小物。'}),
   mirror:item('壁掛鏡子','bathroom','mirror',60,3,80,'#b5aa94',{objectKind:'fixture',mountType:'wall',y:1.1}),
   shower:item('淋浴花灑','bathroom','shower',25,35,110,'#bec8c8',{objectKind:'fixture',mountType:'wall',y:1}),
   showerScreen:item('玻璃淋浴隔間','bathroom','showerScreen',90,4,200,'#839b9d',{objectKind:'fixture'}),
-  modularWardrobe:item('頂天立地衣櫃','bedroom','modularWardrobe',180,60,270,'#d1c6b3',{objectKind:'fixture',wardrobe:{style:'multi',doorColor:'#d1c6b3'}}),
+  modularWardrobe:item('頂天立地衣櫃','builtIn','modularWardrobe',180,60,270,'#d1c6b3',{objectKind:'fixture',wardrobe:{style:'multi',doorColor:'#d1c6b3'}}),
   countertop:item('流理台下櫃','kitchen','countertop',180,60,85,'#c3b59d',{objectKind:'fixture',kitchen:{sink:false,burners:2}}),
   hob:item('瓦斯爐','kitchen','hob',70,45,8,'#52595a',{objectKind:'fixture',kitchen:{sink:false,burners:2},note:'放入後可拖到完整包覆爐具外框的檯面，或指定支撐物。'}),
   hood:item('抽油煙機','kitchen','hood',90,50,65,'#c0c7c7',{objectKind:'fixture',mountType:'wall',y:1.55}),
