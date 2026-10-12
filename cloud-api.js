@@ -1,3 +1,4 @@
+import {checksum,verifyAsset} from './asset-integrity.js';
 import {cloudConfig as config} from './cloud-config.js';
 const SESSION='home-cloud:session:'+config.projectRef;
 let refreshing;
@@ -9,7 +10,7 @@ export async function request(path,{method='GET',body,auth=true,blob=false,heade
  let token;if(auth){const s=await session();if(!s)throw Error('請先登入');token=s.access_token;}
  const binary=body instanceof Blob;
  const r=await fetch(config.url+path,{method,headers:{apikey:config.publishableKey,...(token?{Authorization:`Bearer ${token}`} :{}),...(body&&!binary?{'Content-Type':'application/json'}:{}),...headers},body:body?(binary?body:JSON.stringify(body)):undefined,signal:AbortSignal.timeout(60000)});
- if(!r.ok){let detail;try{detail=await r.json();}catch{}const error=Error(detail?.message||detail?.msg||detail?.error_description||`雲端連線失敗 (${r.status})`);error.code=detail?.code;error.status=r.status;throw error;}
+ if(!r.ok){let detail;try{detail=await r.json();}catch{}const error=Error(detail?.message||detail?.msg||detail?.error_description||`雲端連線失敗 (${r.status})`);error.code=detail?.code??detail?.error;error.status=r.status;throw error;}
  if(blob)return r.blob();if(r.status===204)return null;const text=await r.text();return text?JSON.parse(text):null;
 }
 export async function session(){let s=readSession();if(!s)return null;if(s.expires_at*1000>Date.now()+60000)return s;
@@ -29,9 +30,9 @@ export async function acceptLink(){const p=new URLSearchParams(location.hash.sli
 export async function signOut(){try{await request('/auth/v1/logout?scope=local',{method:'POST'});}catch{/* Local sign-out still completes when offline. */}finally{clearSession();}}
 export async function readRows(kind){const rows=[];for(let offset=0;;offset+=500){const page=await cloudStage('database_read_'+kind,()=>request(`/rest/v1/planner_${kind}?select=*&order=id&limit=500&offset=${offset}`));rows.push(...page);if(page.length<500)return rows;if(offset>100000)throw Error('雲端紀錄超過此版本讀取上限');}}
 export const writeRows=(home,changes,create=false)=>cloudStage('database_write',()=>request('/rest/v1/rpc/planner_write',{method:'POST',body:{p_home:home,p_changes:changes,p_create:create}}));
-export async function uploadAsset(asset,owner,home){const path=home?`homes/${home}/${asset.id}`:`${owner}/${asset.id}`;
- try{await cloudStage('storage_upload',()=>request(`/storage/v1/object/${config.bucket}/${path}`,{method:'POST',body:asset.blob,headers:{'Content-Type':asset.mime||'application/octet-stream'}}));}catch(e){if(!['Duplicate','23505'].includes(e.code)&&e.status!==409)throw e;}
- return {id:asset.id,name:asset.name,kind:asset.kind,mime:asset.mime,path,size:asset.blob.size};
+export async function uploadAsset(asset,owner,home){const canonical=home?`homes/${home}/${asset.id}`:`${owner}/${asset.id}`,path=asset.path??canonical,sha256=await checksum(asset.blob);if(![canonical,`${owner}/${asset.id}`].includes(path))throw Error('資產路徑不符');
+ try{await cloudStage('storage_upload',()=>request(`/storage/v1/object/${config.bucket}/${path}`,{method:'POST',body:asset.blob,headers:{'Content-Type':asset.mime||'application/octet-stream'}}));}catch(e){if(!['Duplicate','23505'].includes(e.code)&&e.status!==409)throw e;const existing=await downloadAsset({path});if(!await verifyAsset({blob:existing},{size:asset.blob.size,sha256}))throw Error('同一資產 ID 已有不同內容；未修改原模型，請重新選擇檔案');}
+ return {id:asset.id,name:asset.name,kind:asset.kind,mime:asset.mime,path,size:asset.blob.size,sha256,version:asset.id,updatedAt:new Date().toISOString()};
 }
 export const downloadAsset=meta=>cloudStage('storage_download',()=>request(`/storage/v1/object/authenticated/${config.bucket}/${meta.path}`,{blob:true}));
 export const unusedAssets=(retire=false,home)=>request('/rest/v1/rpc/'+(home?'planner_unused_assets_for_home':'planner_unused_assets'),{method:'POST',body:{p_retire:retire,...(home?{p_home:home}:{})}});

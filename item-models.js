@@ -1,7 +1,7 @@
 import * as THREE from './vendor/three.module.js';
 import {GLTFLoader} from './vendor/loaders/GLTFLoader.js';
 import {createFurnitureModel} from './furniture-factory.js';
-import {getAsset} from './my-items-store.js';
+import {getAsset,getAssetSourceVersion} from './my-items-store.js';
 import {itemTypes} from './my-items-data.js';
 const cache=new Map();
 export function disposeModel(group){const geometries=new Set(),materials=new Set(),textures=new Set();group?.traverse(o=>{if(o.geometry)geometries.add(o.geometry);for(const m of o.material?(Array.isArray(o.material)?o.material:[o.material]):[]){materials.add(m);for(const value of Object.values(m))if(value?.isTexture)textures.add(value);}});geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>{t.dispose();});}
@@ -26,7 +26,7 @@ export function fittedModel(template,f){const {root,size}=normalizedModel(templa
   if(f.model.tint)root.traverse(o=>{for(const m of o.material?(Array.isArray(o.material)?o.material:[o.material]):[])if(m.color)m.color.set(f.color);});return root;
 }
 export async function validateModel(blob,model){const template=await parseModel(blob,model.kind);let normalized;try{normalized=normalizedModel(template,model);return normalized.size;}finally{disposeModel(normalized?.root);disposeModel(template);}}
-export async function templateFor(id,kind){if(!cache.has(id)){const pending=getAsset(id).then(a=>{if(!a)throw Error('模型檔案遺失，暫以簡化外觀顯示');return parseModel(a.blob,kind);});cache.set(id,pending);pending.catch(()=>cache.delete(id));}return cache.get(id);}
+export async function templateFor(id,kind,options){const key=`${getAssetSourceVersion()}:${id}`;if(!cache.has(key)){const pending=getAsset(id,options).then(a=>{if(!a)throw Error('模型檔案遺失，暫以簡化外觀顯示');return parseModel(a.blob,kind);});cache.set(key,pending);pending.catch(()=>{if(cache.get(key)===pending)cache.delete(key);});}return cache.get(key);}
 export function itemFallback(item){return createFurnitureModel({...item,type:itemTypes[item.itemType??item.type]?.fallback??item.type});}
 export async function createItemModel(item,blob){if(!item.model?.assetId)return itemFallback(item);const template=blob?await parseModel(blob,item.model.kind):await templateFor(item.model.assetId,item.model.kind);try{return fittedModel(template,item);}finally{if(blob)disposeModel(template);}}
 export function releaseCache(){for(const promise of cache.values())promise.then(disposeModel).catch(()=>{});cache.clear();}

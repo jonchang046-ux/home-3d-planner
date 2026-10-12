@@ -1,6 +1,7 @@
+import {getAssetSourceVersion} from './my-items-store.js';
 import {elevation} from './placement-data.js';
 import {createStructures} from './structure-factory.js';
-import {templateFor,fittedModel,disposeModel,pruneModelCache} from './item-models.js';
+import {templateFor,fittedModel,disposeModel,pruneModelCache,releaseCache} from './item-models.js';
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {houseConfig as house,allRooms,wallParts,openings} from './house-config.js';
@@ -45,12 +46,12 @@ export function createScene(container,{onSelect,onMove,onMoveStart=()=>{},onMove
     const st=house.stairs;for(let i=0;i<st.steps;i++){const d=st.depth/st.steps;box(building,st.width,(i+1)*st.rise,d,st.x+st.width/2,(i+1)*st.rise/2,st.z+i*d+d/2,'#c0c5b7');}
     building.add(createStructures(house,{walking,cutaway:lowWalls}));labels.visible=showLabels&&!walking;ceiling.visible=walking;
   }
-  const failedAssets=new Set();
-  const modelKey=f=>JSON.stringify([f.type,f.width,f.depth,f.height,f.color,f.model,f.wardrobe,f.kitchen]);
+  const failedAssets=new Set();let retrying=false;
+  const modelKey=f=>JSON.stringify([getAssetSourceVersion(),f.type,f.width,f.depth,f.height,f.color,f.model,f.wardrobe,f.kitchen]);
   function makeFurniture(f,reused){const g=reused??createFurnitureModel(f),w=f.width/100,d=f.depth/100;
     g.position.set(f.x,elevation(f),f.z);g.rotation.y=-THREE.MathUtils.degToRad(f.rotation);furnishings.add(g);
     g.userData.modelKey=modelKey(f);
-    if(f.model?.assetId&&!reused){const fallback=g.children[0];g.userData.modelStatus='loading';templateFor(f.model.assetId,f.model.kind).then(template=>{if(g.parent!==furnishings)return;const model=fittedModel(template,f);g.remove(fallback);disposeModel(fallback);g.add(model);g.userData.modelStatus='loaded';}).catch(error=>{if(g.parent!==furnishings)return;g.userData.modelStatus='fallback';if(!failedAssets.has(f.model.assetId)){failedAssets.add(f.model.assetId);onAssetError(error.message+'；保留原尺寸的簡化外觀');}});}
+    if(f.model?.assetId&&!reused){const fallback=g.children[0];g.userData.modelStatus='loading';templateFor(f.model.assetId,f.model.kind,{reload:retrying}).then(template=>{if(g.parent!==furnishings)return;const model=fittedModel(template,f);g.remove(fallback);disposeModel(fallback);g.add(model);g.userData.modelStatus='loaded';}).catch(error=>{if(g.parent!==furnishings)return;g.userData.modelStatus='fallback';g.userData.fallbackReason=error.message;if(!failedAssets.has(f.model.assetId)){failedAssets.add(f.model.assetId);onAssetError('自訂模型暫時無法載入，正在使用預設模型；設定仍保留。請到「視角」重新載入模型。');}});}
     if(f.id===selected){const points=[[-w/2,-d/2],[w/2,-d/2],[w/2,d/2],[-w/2,d/2],[-w/2,-d/2]].map(([x,z])=>new THREE.Vector3(x,.025,z));const edge=new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),new THREE.LineBasicMaterial({color:'#d57627',depthTest:false}));edge.renderOrder=5;edge.userData.editorOnly=true;edge.visible=!walking;g.add(edge);const helper=new THREE.BoxHelper(g,0xd57627);helper.material.transparent=true;helper.material.opacity=.55;helper.userData.editorOnly=true;helper.visible=!walking;furnishings.add(helper);}
   }
   function render(s,id,architectureChanged=false){const first=!state;pruneModelCache(s.furniture.map(f=>f.model?.assetId).filter(Boolean));state=s;selected=id;if(first||architectureChanged)architecture();// 匯入模型僅在外觀／尺寸變更時重建；移動與旋轉保留既有網格，避免拖曳閃回 fallback。
@@ -110,5 +111,6 @@ export function createScene(container,{onSelect,onMove,onMoveStart=()=>{},onMove
     hemisphere.intensity=value?1.5:2.6;sun.intensity=value?.8:3;renderer.toneMapping=value?THREE.ACESFilmicToneMapping:THREE.NoToneMapping;renderer.toneMappingExposure=value?.9:1;
     furnishings.traverse(o=>{if(o.userData.editorOnly)o.visible=!value;});resize();return true;
   }
-  return {render,reset,setWalk,renderMeasurement,setMeasuring(){controls.enabled=!walking&&!isMoving()&&!getMeasurement().active;renderMeasurement();},resetWalk:()=>walk.reset(),get walkPose(){return walk.snapshot;},get orbitPose(){return {position:camera.position.toArray(),target:controls.target.toArray(),enabled:controls.enabled,ceiling:ceiling.visible};},zoom(f){camera.position.sub(controls.target).multiplyScalar(1/f).add(controls.target);controls.update();},setActive(v){active=v;if(v)resize();},setMoving(v){controls.enabled=!v&&!walking&&!getMeasurement().active;},setWalls(v){lowWalls=v;architecture();},setLabels(v){showLabels=v;labels.visible=v&&!walking;},get lowWalls(){return lowWalls;},get showLabels(){return showLabels;},canvas:renderer.domElement};
+  function retryModels(){retrying=true;releaseCache();failedAssets.clear();for(const g of [...furnishings.children])if(g.userData.modelStatus==='fallback'){furnishings.remove(g);disposeModel(g);}render(state,selected);retrying=false;}
+  return {render,reset,setWalk,retryModels,renderMeasurement,setMeasuring(){controls.enabled=!walking&&!isMoving()&&!getMeasurement().active;renderMeasurement();},resetWalk:()=>walk.reset(),get walkPose(){return walk.snapshot;},get orbitPose(){return {position:camera.position.toArray(),target:controls.target.toArray(),enabled:controls.enabled,ceiling:ceiling.visible};},zoom(f){camera.position.sub(controls.target).multiplyScalar(1/f).add(controls.target);controls.update();},setActive(v){active=v;if(v)resize();},setMoving(v){controls.enabled=!v&&!walking&&!getMeasurement().active;},setWalls(v){lowWalls=v;architecture();},setLabels(v){showLabels=v;labels.visible=v&&!walking;},get lowWalls(){return lowWalls;},get showLabels(){return showLabels;},canvas:renderer.domElement};
 }
