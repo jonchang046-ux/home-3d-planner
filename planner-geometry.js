@@ -35,6 +35,13 @@ export function moveFurniture(f,target,house,{snap=true,items=[]}={}){const soli
  const snapped=snap?snapToWall(current,house):current,final=noWorseOverlap(groupOverlaps(current,items),groupOverlaps(snapped,items))?snapped:current;return {x:final.x,z:final.z,snapped:!!final.snapped,blocked,objectBlocked};
 }
 export function findFreePlacement(f,items,house,room){
+ // Prefer the requested orientation. A floor object may fit only along the
+ // room's longer axis; search that orientation before declaring the room full.
+ const rotations=mountType(f)==='floor'&&!f.supportParentId?[f.rotation,(f.rotation+90)%360]:[f.rotation];
+ for(const rotation of rotations){const position=findFreePlacementAtRotation({...f,rotation},items,house,room);if(position)return {...position,rotation};}
+ return null;
+}
+function findFreePlacementAtRotation(f,items,house,room){
  const inside=([x,z])=>{let yes=false;const p=room.polygon;for(let i=0,j=p.length-1;i<p.length;j=i++)if((p[i][1]>z)!==(p[j][1]>z)&&x<(p[j][0]-p[i][0])*(z-p[i][1])/(p[j][1]-p[i][1])+p[i][0])yes=!yes;return yes;};
  const valid=c=>furnitureCorners(c).every(inside)&&wallPenetration(c,house)<=EPS&&!items.some(o=>o.id!==c.id&&objectOverlap(c,o)>EPS);
  if(valid(f))return {x:f.x,z:f.z};
