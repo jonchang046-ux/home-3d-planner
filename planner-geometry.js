@@ -34,16 +34,16 @@ export function moveFurniture(f,target,house,{snap=true,items=[]}={}){const soli
  }
  const snapped=snap?snapToWall(current,house):current,final=noWorseOverlap(groupOverlaps(current,items),groupOverlaps(snapped,items))?snapped:current;return {x:final.x,z:final.z,snapped:!!final.snapped,blocked,objectBlocked};
 }
-export function findFreePlacement(f,items,house,room){
+export function findFreePlacement(f,items,house,room,{accept=()=>true}={}){
  // Prefer the requested orientation. A floor object may fit only along the
  // room's longer axis; search that orientation before declaring the room full.
  const rotations=mountType(f)==='floor'&&!f.supportParentId?[f.rotation,(f.rotation+90)%360]:[f.rotation];
- for(const rotation of rotations){const position=findFreePlacementAtRotation({...f,rotation},items,house,room);if(position)return {...position,rotation};}
+ for(const rotation of rotations){const position=findFreePlacementAtRotation({...f,rotation},items,house,room,accept);if(position)return {...position,rotation};}
  return null;
 }
-function findFreePlacementAtRotation(f,items,house,room){
- const inside=([x,z])=>{let yes=false;const p=room.polygon;for(let i=0,j=p.length-1;i<p.length;j=i++)if((p[i][1]>z)!==(p[j][1]>z)&&x<(p[j][0]-p[i][0])*(z-p[i][1])/(p[j][1]-p[i][1])+p[i][0])yes=!yes;return yes;};
- const valid=c=>furnitureCorners(c).every(inside)&&wallPenetration(c,house)<=EPS&&!items.some(o=>o.id!==c.id&&objectOverlap(c,o)>EPS);
+export function furnitureFitsRoom(f,room){return furnitureCorners(f).every(([x,z])=>{let yes=false;const p=room.polygon;for(let i=0,j=p.length-1;i<p.length;j=i++)if((p[i][1]>z)!==(p[j][1]>z)&&x<(p[j][0]-p[i][0])*(z-p[i][1])/(p[j][1]-p[i][1])+p[i][0])yes=!yes;return yes;});}
+function findFreePlacementAtRotation(f,items,house,room,accept){
+ const valid=c=>furnitureFitsRoom(c,room)&&wallPenetration(c,house)<=EPS&&!items.some(o=>o.id!==c.id&&objectOverlap(c,o)>EPS)&&accept(c);
  if(valid(f))return {x:f.x,z:f.z};
  if(f.supportParentId)return null;
  const minX=Math.min(...room.polygon.map(p=>p[0])),maxX=Math.max(...room.polygon.map(p=>p[0])),minZ=Math.min(...room.polygon.map(p=>p[1])),maxZ=Math.max(...room.polygon.map(p=>p[1])),positions=[],corners=furnitureCorners({...f,x:0,z:0}),rx=Math.max(...corners.map(p=>Math.abs(p[0]))),rz=Math.max(...corners.map(p=>Math.abs(p[1]))),half=house.defaults.wallThickness/2;

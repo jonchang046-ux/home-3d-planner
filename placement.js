@@ -1,7 +1,8 @@
 import {catalog,resolveType} from './furniture.js';
 import {actualSize} from './my-items-data.js';
 import {elevation,mountType} from './placement-data.js';
-import {collisionRegressions} from './object-collision.js';
+import {collisionRegressions,objectOverlap} from './object-collision.js';
+import {findFreePlacement,furnitureFitsRoom,wallPenetration} from './planner-geometry.js';
 export {elevation,mountType} from './placement-data.js';
 const EPS=1e-6,angle=r=>r*Math.PI/180,norm=r=>(r%360+360)%360;
 // Automatic dragging may lift an object onto an ordinary table, but never onto
@@ -48,3 +49,19 @@ export function updatePlacement(items,id,patch,house,{autoSupport=false,parentId
  return warnings;
 }
 export function deletePlacement(items,id,house){const next=items.filter(f=>f.id!==id);for(const f of next)if(f.supportParentId===id)detach(f);resolvePlacements(next,house);return next;}
+// Plan the whole transfer before mutating any live object. IDs, model intent,
+// item information and descendant support offsets remain the same.
+export function movePlacementToRoom(items,id,house,room){
+ const original=items.find(f=>f.id===id);if(!original||!room)return {ok:false,message:'請先選擇目的房間'};const oldRotation=original.rotation;
+ const ids=descendants(items,id);ids.add(id);const group=structuredClone(items.filter(f=>ids.has(f.id))),root=group.find(f=>f.id===id),others=items.filter(f=>!ids.has(f.id)),detached=!!root.supportParentId;
+ if(detached||mountType(root)==='surface')detach(root);
+ const preview=candidate=>{const moved=structuredClone(group),f=moved.find(f=>f.id===id);Object.assign(f,candidate);const warnings=resolvePlacements(moved,house);if(warnings.length)return null;
+  if(moved.some(f=>!furnitureFitsRoom(f,room)||wallPenetration(f,house)>EPS||elevation(f)+actualSize(f)[1]>ceilingHeight(house)+EPS))return null;
+  if(moved.some(a=>others.some(b=>objectOverlap(a,b)>EPS))||collisionRegressions(items,[...others,...moved]).length)return null;return moved;
+ };
+ const position=findFreePlacement({...root,x:room.label[0],z:room.label[1]},others,house,room,{accept:c=>!!preview(c)});
+ if(!position)return {ok:false,message:'目的房間找不到能容納這件物品及上方物品的空位，原配置未變更'};
+ const moved=preview({...root,...position});if(!moved)return {ok:false,message:'無法安全搬移，原配置未變更'};
+ for(const next of moved){const current=items.find(f=>f.id===next.id);for(const key of Object.keys(current))delete current[key];Object.assign(current,next);}
+ return {ok:true,count:moved.length,detached,rotated:Math.abs(position.rotation-oldRotation)>EPS};
+}
