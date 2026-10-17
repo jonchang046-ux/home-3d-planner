@@ -39,8 +39,12 @@ export function findFreePlacement(f,items,house,room){
  const valid=c=>furnitureCorners(c).every(inside)&&wallPenetration(c,house)<=EPS&&!items.some(o=>o.id!==c.id&&objectOverlap(c,o)>EPS);
  if(valid(f))return {x:f.x,z:f.z};
  if(f.supportParentId)return null;
- const minX=Math.min(...room.polygon.map(p=>p[0])),maxX=Math.max(...room.polygon.map(p=>p[0])),minZ=Math.min(...room.polygon.map(p=>p[1])),maxZ=Math.max(...room.polygon.map(p=>p[1])),positions=[];
- for(let x=minX+.05;x<=maxX;x+=.1)for(let z=minZ+.05;z<=maxZ;z+=.1)positions.push({x,z});positions.sort((a,b)=>Math.hypot(a.x-f.x,a.z-f.z)-Math.hypot(b.x-f.x,b.z-f.z));
+ const minX=Math.min(...room.polygon.map(p=>p[0])),maxX=Math.max(...room.polygon.map(p=>p[0])),minZ=Math.min(...room.polygon.map(p=>p[1])),maxZ=Math.max(...room.polygon.map(p=>p[1])),positions=[],corners=furnitureCorners({...f,x:0,z:0}),rx=Math.max(...corners.map(p=>Math.abs(p[0]))),rz=Math.max(...corners.map(p=>Math.abs(p[1]))),half=house.defaults.wallThickness/2;
+ // Include exact inner-face alignments as well as the grid: a nearly room-wide
+ // cabinet must not be rejected merely because its only fit lies between cells.
+ const xs=new Set([f.x,(minX+maxX)/2,minX+rx+half,maxX-rx-half]),zs=new Set([f.z,(minZ+maxZ)/2,minZ+rz+half,maxZ-rz-half]);
+ for(let x=minX+.05;x<=maxX;x+=.1)xs.add(x);for(let z=minZ+.05;z<=maxZ;z+=.1)zs.add(z);
+ for(const x of xs)for(const z of zs)positions.push({x,z});positions.sort((a,b)=>Math.hypot(a.x-f.x,a.z-f.z)-Math.hypot(b.x-f.x,b.z-f.z));
  return positions.find(p=>valid({...f,...p}))??null;
 }
 const alignTypes=new Set(['bed','singleBed','desk','lDesk','fridge','washer','wardrobe','storage','tvCabinet','lowCabinet','dresser','bookcase','openShelf','sideboard','shoeCabinet','entryCabinet','applianceCabinet','modularWardrobe','countertop','basin','bathVanity','toilet','hood','mirror','shower','wallCabinet']);
