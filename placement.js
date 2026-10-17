@@ -1,6 +1,7 @@
 import {catalog,resolveType} from './furniture.js';
 import {actualSize} from './my-items-data.js';
 import {elevation,mountType} from './placement-data.js';
+import {collisionRegressions} from './object-collision.js';
 export {elevation,mountType} from './placement-data.js';
 const EPS=1e-6,angle=r=>r*Math.PI/180,norm=r=>(r%360+360)%360;
 // Automatic dragging may lift an object onto an ordinary table, but never onto
@@ -38,9 +39,12 @@ export function limitHeight(f,house){const limit=ceilingHeight(house);let change
  return changed;
 }
 export function updatePlacement(items,id,patch,house,{autoSupport=false,parentId}={}){const f=items.find(f=>f.id===id);if(!f)return [];
+ const before=structuredClone(items);
  Object.assign(f,patch);const warnings=[];
  if(mountType(f)==='wall'){detach(f,true);}else if(patch.mountType==='floor'){detach(f);}else if(autoSupport||parentId){const hit=findSupport(f,items,house,parentId);if(hit)attach(f,hit.parent,hit.surface);else{detach(f);if(parentId)warnings.push('物件外框未完整落在有效檯面內，已放回地板');}}
  else if(f.supportParentId){const parent=items.find(x=>x.id===f.supportParentId),surface=parent&&supportSurfaces(parent).find(s=>s.id===(f.supportSurfaceId??'top'));if(surface&&fitsSurface(f,parent,surface))attach(f,parent,surface);else detach(f);}
- if(limitHeight(f,house))warnings.push('高度已限制在天花板下');return [...warnings,...resolvePlacements(items,house)];
+ if(limitHeight(f,house))warnings.push('高度已限制在天花板下');warnings.push(...resolvePlacements(items,house));
+ const collisions=collisionRegressions(before,items);if(collisions.length){for(let i=0;i<items.length;i++){for(const key of Object.keys(items[i]))delete items[i][key];Object.assign(items[i],before[i]);}return ['與其他物品重疊，已保留原配置'];}
+ return warnings;
 }
 export function deletePlacement(items,id,house){const next=items.filter(f=>f.id!==id);for(const f of next)if(f.supportParentId===id)detach(f);resolvePlacements(next,house);return next;}

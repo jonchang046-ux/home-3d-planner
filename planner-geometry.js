@@ -2,6 +2,7 @@ import {actualSize} from './my-items-data.js';
 import {elevation,mountType} from './placement-data.js';
 import {wallPartsFor} from './house-geometry.js';
 import {footprint} from './furniture.js';
+import {groupOverlaps,noWorseOverlap,objectOverlap} from './object-collision.js';
 const EPS=1e-6;
 const dot=(a,b)=>a[0]*b[0]+a[1]*b[1];
 const sub=(a,b)=>[a[0]-b[0],a[1]-b[1]];
@@ -25,13 +26,22 @@ export function snapToWall(f,house,threshold=.1){const solids=wallSolids(house,e
   if(!best||Math.abs(gap)<best.distance)best={...next,snapped:true,distance:Math.abs(gap),wall:s.wall,angle:Math.atan2(s.u[1],s.u[0])*180/Math.PI};
  }return best??{...f,snapped:false};
 }
-export function moveFurniture(f,target,house,{snap=true}={}){const solids=wallSolids(house,elevation(f)+actualSize(f)[1],elevation(f)),bounds=house.bounds,
- x=Math.max(bounds.minX,Math.min(bounds.maxX,target.x)),z=Math.max(bounds.minZ,Math.min(bounds.maxZ,target.z)),dx=x-f.x,dz=z-f.z,steps=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.035));let current={...f},blocked=false;
- for(let i=0;i<steps;i++){const prior=score(current,solids),allowed=c=>{const next=score(c,solids);return next<=EPS||(prior>EPS&&next<prior-EPS);},next={...current,x:current.x+dx/steps,z:current.z+dz/steps};
+export function moveFurniture(f,target,house,{snap=true,items=[]}={}){const solids=wallSolids(house,elevation(f)+actualSize(f)[1],elevation(f)),bounds=house.bounds,
+ x=Math.max(bounds.minX,Math.min(bounds.maxX,target.x)),z=Math.max(bounds.minZ,Math.min(bounds.maxZ,target.z)),dx=x-f.x,dz=z-f.z,step=Math.min(.035,...[f,...items].map(o=>Math.min(o.width,o.depth)/200)),steps=Math.max(1,Math.ceil(Math.hypot(dx,dz)/Math.max(.005,step)));let current={...f},blocked=false,objectBlocked=false;
+ for(let i=0;i<steps;i++){const prior=score(current,solids),overlaps=groupOverlaps(current,items),allowed=c=>{const next=score(c,solids),clear=noWorseOverlap(overlaps,groupOverlaps(c,items));if(!clear)objectBlocked=true;return clear&&(next<=EPS||(prior>EPS&&next<prior-EPS));},next={...current,x:current.x+dx/steps,z:current.z+dz/steps};
   if(allowed(next)){current=next;continue;}blocked=true;
   const sx={...current,x:next.x},sz={...current,z:next.z};if(allowed(sx))current=sx;else if(allowed(sz))current=sz;else break;
  }
- const final=snap?snapToWall(current,house):current;return {x:final.x,z:final.z,snapped:!!final.snapped,blocked};
+ const snapped=snap?snapToWall(current,house):current,final=noWorseOverlap(groupOverlaps(current,items),groupOverlaps(snapped,items))?snapped:current;return {x:final.x,z:final.z,snapped:!!final.snapped,blocked,objectBlocked};
+}
+export function findFreePlacement(f,items,house,room){
+ const inside=([x,z])=>{let yes=false;const p=room.polygon;for(let i=0,j=p.length-1;i<p.length;j=i++)if((p[i][1]>z)!==(p[j][1]>z)&&x<(p[j][0]-p[i][0])*(z-p[i][1])/(p[j][1]-p[i][1])+p[i][0])yes=!yes;return yes;};
+ const valid=c=>furnitureCorners(c).every(inside)&&wallPenetration(c,house)<=EPS&&!items.some(o=>o.id!==c.id&&objectOverlap(c,o)>EPS);
+ if(valid(f))return {x:f.x,z:f.z};
+ if(f.supportParentId)return null;
+ const minX=Math.min(...room.polygon.map(p=>p[0])),maxX=Math.max(...room.polygon.map(p=>p[0])),minZ=Math.min(...room.polygon.map(p=>p[1])),maxZ=Math.max(...room.polygon.map(p=>p[1])),positions=[];
+ for(let x=minX+.05;x<=maxX;x+=.1)for(let z=minZ+.05;z<=maxZ;z+=.1)positions.push({x,z});positions.sort((a,b)=>Math.hypot(a.x-f.x,a.z-f.z)-Math.hypot(b.x-f.x,b.z-f.z));
+ return positions.find(p=>valid({...f,...p}))??null;
 }
 const alignTypes=new Set(['bed','singleBed','desk','lDesk','fridge','washer','wardrobe','storage','tvCabinet','lowCabinet','dresser','bookcase','openShelf','sideboard','shoeCabinet','entryCabinet','applianceCabinet','modularWardrobe','countertop','basin','bathVanity','toilet','hood','mirror','shower','wallCabinet']);
 // Preserve an existing wall contact when changing dimensions only. Explicit
