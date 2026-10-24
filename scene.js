@@ -3,7 +3,7 @@ import {elevation} from './placement-data.js';
 import {createStructures} from './structure-factory.js';
 import {createLighting} from './lighting-factory.js';
 import {createLightSimulation} from './light-simulation.js';
-import {finishedWallParts} from './scene-settings.js';
+import {finishedWallParts,ceilingColorFor} from './scene-settings.js';
 import {templateFor,fittedModel,disposeModel,pruneModelCache,releaseCache} from './item-models.js';
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
@@ -34,7 +34,7 @@ export function createScene(container,{onSelect,onMove,onMoveStart=()=>{},onMove
     for(const room of allRooms){const shape=new THREE.Shape(room.polygon.map(p=>new THREE.Vector2(p[0],-p[1]))),geo=new THREE.ExtrudeGeometry(shape,{depth:house.floor.thickness,bevelEnabled:false});geo.rotateX(-Math.PI/2);const surface=roomMaterial(state,room),material=mat(surface.color);
       if(surface.preset!=='solid'){const canvas=document.createElement('canvas');canvas.width=canvas.height=128;drawFloorPattern(canvas.getContext('2d'),surface.preset,surface.color);const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.repeat.set(1/1.2,1/1.2);material.color.set('#ffffff');material.map=texture;}
       const mesh=new THREE.Mesh(geo,material);mesh.userData.roomId=room.id;mesh.position.y=-house.floor.thickness;mesh.receiveShadow=true;building.add(mesh);label(room);
-      if(!['balcony','stairs'].includes(room.kind)){const g=new THREE.ShapeGeometry(shape);g.rotateX(-Math.PI/2);const material=mat(state.ceilingColor??house.ceilingColor??'#ffffff');material.side=THREE.DoubleSide;const roof=new THREE.Mesh(g,material);roof.position.y=house.ceilingHeight;ceiling.add(roof);}
+      if(!['balcony','stairs'].includes(room.kind)){const g=new THREE.ShapeGeometry(shape);g.rotateX(-Math.PI/2);const material=mat(ceilingColorFor(house,state));material.side=THREE.DoubleSide;const roof=new THREE.Mesh(g,material);roof.position.y=house.ceilingHeight;ceiling.add(roof);}
       // 薄縫只是視覺材質，不改變幾何尺寸。
       const points=room.polygon.map(p=>new THREE.Vector3(p[0],.005,p[1]));points.push(points[0].clone());building.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),new THREE.LineBasicMaterial({color:'#9d9f87',transparent:true,opacity:.35})));
     }

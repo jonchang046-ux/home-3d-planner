@@ -10,3 +10,5 @@ export function validHouseSceneSettings(h){const number=(n,a,b)=>Number.isFinite
 }
 export function finishedWallParts(house,state,wall,parts){return parts.flatMap(p=>{const surfaces=(house.wallFinishes??[]).filter(s=>s.wallId===wall.id&&s.start<p.start+p.length&&s.end>p.start),cuts=[...new Set([p.start,p.start+p.length,...surfaces.flatMap(s=>[Math.max(p.start,s.start),Math.min(p.start+p.length,s.end)])])].sort((a,b)=>a-b);
  return cuts.slice(1).filter((v,i)=>v-cuts[i]>1e-7).map((end,i)=>{const start=cuts[i],mid=(start+end)/2,surface=surfaces.find(s=>mid>=s.start&&mid<=s.end);return {...p,start,length:end-start,surface,color:surface?(state.wallColors?.[surface.id]??surface.color??state.wallColor):null};});});}
+
+export const ceilingColorFor=(house,state)=>state.wallColor??house.ceilingColor??'#ffffff';
