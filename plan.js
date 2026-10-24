@@ -1,6 +1,7 @@
 import {fixtureSymbol} from './fixture-plan.js';
 import {elevation,mountType} from './placement-data.js';
 import {structureGeometry} from './structures.js';
+import {trackGeometry,roundLightGeometry} from './lighting.js';
 import {actualSize} from './my-items-data.js';
 import {catalog,resolveType,footprint} from './furniture.js';
 import {houseConfig as house,allRooms,wallParts,openings} from './house-config.js';
@@ -34,6 +35,9 @@ export function createPlan(svg,{onSelect,onMove,onMoveStart=()=>{},onMoveEnd,onM
       g.append(el('text',{x:0,y:d/2+.15,transform:`rotate(${-f.rotation},0,${d/2+.15})`},f.name+(mountType(f)==='wall'?' · 壁掛':'')));
       g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onSelect(f.id);}});svg.append(g);
     }
+    const lighting=el('g',{class:'ceiling-lighting','pointer-events':'none','aria-label':'天花軌道燈位置'});
+    for(const s of trackGeometry(house)){const g=el('g',{'data-lighting-id':s.id});g.append(el('title',{},`${s.name??'軌道燈'} · ${s.lamps.length} 顆燈頭 · 天花高度 ${s.top*100} cm（沿用模型）`));for(const path of s.paths)g.append(el('polyline',{points:path.map(p=>p.join(',')).join(' '),fill:'none',stroke:'#276e8b','stroke-width':.035,'stroke-dasharray':'.10 .035','stroke-linejoin':'round',opacity:.85}));for(const l of s.lamps)g.append(el('circle',{cx:l.x,cy:l.z,r:.045,fill:'#276e8b',stroke:'#f9f7ee','stroke-width':.012}));lighting.append(g);}svg.append(lighting);
+    for(const s of roundLightGeometry(house)){const g=el('g',{'data-lighting-id':s.id,'data-lighting-kind':s.kind,'pointer-events':'none'});g.append(el('title',{},`${s.name} · ${s.colorTemperatureK}K${s.powerW?' · '+s.powerW+'W':''} · ${s.status??''}`));g.append(el('circle',{cx:s.x,cy:s.z,r:s.diameter/2,fill:s.lightColor,stroke:'#627b83','stroke-width':.018}));g.append(el('circle',{cx:s.x,cy:s.z,r:s.diameter*.18,fill:'#d0b879'}));svg.append(g);}
     svg.append(el('line',{x1:0,y1:11.55,x2:1,y2:11.55,stroke:'#56674c','stroke-width':.025}));svg.append(el('text',{x:1.1,y:11.59,class:'measure'},'1 m · 比例示意'));
     renderMeasurement();
   }

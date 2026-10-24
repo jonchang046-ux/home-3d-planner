@@ -1,0 +1,11 @@
+// Shared ceiling fixture data. Private paths and lamp positions live only in
+// houseConfig.lighting, never in this renderer or in furniture storage.
+export function validLighting(house){const lights=house.lighting;if(lights===undefined)return true;
+ const finite=(n,a,b)=>Number.isFinite(n)&&n>=a&&n<=b,point=p=>Array.isArray(p)&&p.length===2&&finite(p[0],house.bounds.minX,house.bounds.maxX)&&finite(p[1],house.bounds.minZ,house.bounds.maxZ);
+ return Array.isArray(lights)&&lights.length<=50&&new Set(lights.map(s=>s?.id)).size===lights.length&&lights.every(s=>s&&typeof s.id==='string'&&s.id.length<100&&[...house.rooms,...(house.balcony??[])].some(r=>r.id===s.roomId)&&/^#[a-f0-9]{6}$/i.test(s.color)&&/^#[a-f0-9]{6}$/i.test(s.lightColor)&&(['ceiling','recessed'].includes(s.kind)?point(s.position)&&finite(s.diameter,.05,1)&&finite(s.height,.005,.3)&&finite(s.colorTemperatureK,1000,10000)&&(s.powerW===null||finite(s.powerW,1,500)):s.kind==='track'&&finite(s.railWidth,.01,.1)&&finite(s.railHeight,.01,.1)&&finite(s.stemHeight,.01,.2)&&finite(s.headRadius,.01,.1)&&finite(s.headHeight,.03,.3)&&Array.isArray(s.paths)&&s.paths.length>0&&s.paths.length<=20&&s.paths.every(p=>Array.isArray(p)&&p.length>=2&&p.length<=100&&p.every(point)&&p.slice(1).every((v,i)=>Math.hypot(v[0]-p[i][0],v[1]-p[i][1])>.001))&&Array.isArray(s.lamps)&&s.lamps.length<=100&&s.lamps.every(l=>l&&Number.isInteger(l.path)&&l.path>=0&&l.path<s.paths.length&&Number.isInteger(l.segment)&&l.segment>=0&&l.segment<s.paths[l.path].length-1&&finite(l.t,0,1))));
+}
+export function trackGeometry(house){return (house.lighting??[]).filter(s=>s.kind==='track').map(s=>{
+ const top=house.ceilingHeight??house.defaults.wallHeight,rails=s.paths.flatMap((path,pathIndex)=>path.slice(1).map((b,segment)=>{const a=path[segment];return {a,b,path:pathIndex,segment,length:Math.hypot(b[0]-a[0],b[1]-a[1])};})),lamps=s.lamps.map(l=>{const a=s.paths[l.path][l.segment],b=s.paths[l.path][l.segment+1];return {...l,x:a[0]+(b[0]-a[0])*l.t,z:a[1]+(b[1]-a[1])*l.t};});
+ return {...s,top,railCenterY:top-s.railHeight/2,headCenterY:top-s.railHeight-s.stemHeight-s.headHeight/2,rails,lamps};
+ });}
+export function roundLightGeometry(house){return (house.lighting??[]).filter(s=>['ceiling','recessed'].includes(s.kind)).map(s=>({...s,top:house.ceilingHeight??house.defaults.wallHeight,x:s.position[0],z:s.position[1]}));}

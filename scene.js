@@ -1,6 +1,7 @@
 import {getAssetSourceVersion} from './my-items-store.js';
 import {elevation} from './placement-data.js';
 import {createStructures} from './structure-factory.js';
+import {createLighting} from './lighting-factory.js';
 import {templateFor,fittedModel,disposeModel,pruneModelCache,releaseCache} from './item-models.js';
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
@@ -44,7 +45,7 @@ export function createScene(container,{onSelect,onMove,onMoveStart=()=>{},onMove
       }
     }
     const st=house.stairs;for(let i=0;i<st.steps;i++){const d=st.depth/st.steps;box(building,st.width,(i+1)*st.rise,d,st.x+st.width/2,(i+1)*st.rise/2,st.z+i*d+d/2,'#c0c5b7');}
-    building.add(createStructures(house,{walking,cutaway:lowWalls}));labels.visible=showLabels&&!walking;ceiling.visible=walking;
+    building.add(createStructures(house,{walking,cutaway:lowWalls}),createLighting(house));labels.visible=showLabels&&!walking;ceiling.visible=walking;
   }
   const failedAssets=new Set();let retrying=false;
   const modelKey=f=>JSON.stringify([getAssetSourceVersion(),f.type,f.width,f.depth,f.height,f.color,f.model,f.wardrobe,f.kitchen]);
