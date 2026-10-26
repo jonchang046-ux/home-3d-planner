@@ -18,6 +18,12 @@ import {PAINT,lightSettings} from './scene-settings.js';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const loaded=load();let state=loaded.state,selected=null,mode='3d',panel='add',moving=false,scene=null,toastTimer,ready3d=false;
 let furnitureCategory='living',cloud;
+// This device's canvas interaction preference; never part of the shared home.
+const viewOnlyKey='home-planner:3d-view-only';
+let viewOnly=true;try{viewOnly=localStorage.getItem(viewOnlyKey)!=='false';}catch{}
+function renderViewOnly(){const button=$('#view-only-toggle');button.hidden=mode!=='3d';button.setAttribute('aria-pressed',String(viewOnly));button.textContent=viewOnly?'僅檢視：開':'編輯模式';}
+function setViewOnly(value){viewOnly=value;try{localStorage.setItem(viewOnlyKey,String(value));}catch{}scene?.setViewOnly();if(value){setMoving(false);selected=null;render();}renderViewOnly();setMoving(moving);}
+
 const maintenanceUI=createMaintenanceUI({isCloud:()=>!!cloud?.active,toast,prepareWrite:async id=>{if(!cloud?.active)throw Error('請先登入並使用雲端配置。');if(!state.furniture.some(f=>f.id===id))throw Error('這件物品已移除，無法保存紀錄。');await cloud.flush();if(cloud.pending||cloud.conflict)throw Error('家具尚未完成同步，請先處理上方儲存狀態。');}});
 const itemInfoUI=createItemInfoUI({maintenance:maintenanceUI,getObject:id=>state.furniture.find(f=>f.id===id),isCloud:()=>!!cloud?.active,onBack:()=>{showPanel('edit');$('#panel').scrollTop=0;},toast,onSave:async(id,patch)=>{
   const f=state.furniture.find(f=>f.id===id);if(!f)throw Error('找不到這件物品。');
@@ -45,13 +51,13 @@ function undoRedo(redo=false){if(mode==='walk'||dragBefore)return;const next=red
 function refreshMeasurement(){plan.renderMeasurement();scene?.renderMeasurement();const end=measure.b??measure.preview;$('#measurement-value').textContent=measure.a&&end?formatDistance(measurementDistance(measure.a,end)):'點選第一個位置';$('#measurement-note').textContent=measure.a?(measure.b?'已完成 · 再點一下開始新測量':`點選第二個位置${end?' · '+end.kind:''}`):'平面距離 · 自動吸附牆面與家具邊緣';}
 function measurementPoint(p,shift=false,preview=false){if(!measure.active)return;if(preview&&(!measure.a||measure.b))return;measureEdges??=measurementEdges(houseConfig,state.furniture);const next=snapMeasure(p,measureEdges,{anchor:measure.b?null:measure.a,axis:measure.axis,shift});if(preview)measure.preview=next;else if(!measure.a||measure.b){measure.a=next;measure.b=null;measure.preview=null;}else{measure.b=next;measure.preview=null;}refreshMeasurement();}
 function setMeasuring(value){clearTimeout(toastTimer);$('#toast').classList.remove('visible');measure={...measure,active:value,a:null,b:null,preview:null};setMoving(false);$('#measurement-controls').hidden=!value;$('#measure-toggle').setAttribute('aria-pressed',value);document.body.classList.toggle('measuring',value);scene?.setMeasuring();if(value)closePanel();refreshMeasurement();}
-const callbacks={onSelect:select,onMove:move,onMoveStart:beginMove,onMoveEnd:finishMove,onMoveCancel:cancelMove,isMoving:()=>moving,onWalkHint:walkHint,onAssetError:toast,getMeasurement:()=>measure,onMeasure:(p,shift)=>measurementPoint(p,shift),onMeasurePreview:(p,shift)=>measurementPoint(p,shift,true)};
+const callbacks={onSelect:select,onMove:move,onMoveStart:beginMove,onMoveEnd:finishMove,onMoveCancel:cancelMove,isMoving:()=>moving,isViewOnly:()=>mode==='3d'&&viewOnly,onWalkHint:walkHint,onAssetError:toast,getMeasurement:()=>measure,onMeasure:(p,shift)=>measurementPoint(p,shift),onMeasurePreview:(p,shift)=>measurementPoint(p,shift,true)};
 const plan=createPlan($('#plan-view'),callbacks);
-function render(architecture=false){renderLightControls();itemInfoUI.prune(state.furniture);maintenanceUI.prune(state.furniture);resolvePlacements(state.furniture,houseConfig);measureEdges=null;plan.render(state,selected);scene?.render(state,selected,architecture);$('#object-count').textContent=state.furniture.length;historyButtons();}
+function render(architecture=false){renderViewOnly();renderLightControls();itemInfoUI.prune(state.furniture);maintenanceUI.prune(state.furniture);resolvePlacements(state.furniture,houseConfig);measureEdges=null;plan.render(state,selected);scene?.render(state,selected,architecture);$('#object-count').textContent=state.furniture.length;historyButtons();}
 function showPanel(name){panel=name;$('#panel').classList.remove('closed');$('.workspace').classList.add('sheet-open');$$('.toolbar [data-panel]').forEach(b=>b.classList.toggle('active',b.dataset.panel===name||(name==='my-items'&&b.dataset.panel==='add')||(name==='edit'&&b.dataset.panel==='objects')));renderPanel();}
 function closePanel(){$('#panel').classList.add('closed');$('.workspace').classList.remove('sheet-open');}
 function select(id){selected=id;setMoving(false);render();showPanel('edit');$('#panel').scrollTop=0;}
-function setMoving(value){moving=value;scene?.setMoving(value);$('#move-banner').hidden=!value;$('#view-hint').textContent=value?'移動模式：視角已鎖定':mode==='2d'?(state.furniture.some(f=>f.model?.assetId)?'實線外框：目標尺寸 · 虛線內框：模型占地':'點選家具 · 開啟移動模式後拖曳'):'拖家具移動 · 拖空白旋轉 · 雙指縮放平移';}
+function setMoving(value){if(value&&mode==='3d'&&viewOnly){viewOnly=false;try{localStorage.setItem(viewOnlyKey,'false');}catch{}scene?.setViewOnly();renderViewOnly();}moving=value;scene?.setMoving(value);$('#move-banner').hidden=!value;$('#view-hint').textContent=value?'移動模式：視角已鎖定':mode==='2d'?(state.furniture.some(f=>f.model?.assetId)?'實線外框：目標尺寸 · 虛線內框：模型占地':'點選家具 · 開啟移動模式後拖曳'):viewOnly?'僅檢視：拖曳只轉視角，不移動家具':'拖家具移動 · 拖空白旋轉 · 雙指縮放平移';}
 function move(id,x,z){const f=state.furniture.find(f=>f.id===id);if(!f)return;const hit=mountType(f)==='wall'?null:findSupport({...f,x,z},state.furniture,houseConfig),candidate={...f,y:mountType(f)==='wall'?elevation(f):hit?.surface.height??0},result=moveFurniture(candidate,{x,z},houseConfig,{items:state.furniture});const aligned=mountType(f)==='wall'?finishPlacement({...f,...result},houseConfig):result;const warnings=updatePlacement(state.furniture,id,{x:aligned.x,z:aligned.z,...(aligned.rotation!==undefined?{rotation:aligned.rotation}:{})},houseConfig,{autoSupport:true});dragHint=warnings[0]??(result.objectBlocked?'已避開其他物品':result.blocked?'已避開牆體':f.supportParentId?'已放上支撐檯面':result.snapped?'已貼齊牆面':'');render();}
 function setMode(next){
   if(next!=='2d'&&!ready3d){toast('3D 尚未就緒；可先操作 2D');return;}
@@ -67,7 +73,7 @@ function setMode(next){
     clearTimeout(walkHintTimer);$('#walk-hint').classList.remove('visible');
     if(!walkPanelWasClosed)showPanel(panel);else closePanel();
   }
-  mode=next;renderLightControls();$('#plan-view').toggleAttribute('hidden',mode!=='2d');$('#three-view').hidden=mode==='2d';
+  mode=next;renderViewOnly();renderLightControls();$('#plan-view').toggleAttribute('hidden',mode!=='2d');$('#three-view').hidden=mode==='2d';
   for(const value of ['2d','3d','walk'])$('#mode'+value).setAttribute('aria-pressed',mode===value);
   scene?.setActive(mode!=='2d');setMoving(false);if(panel==='view'&&mode!=='walk')renderPanel();
 }
@@ -111,6 +117,7 @@ $$('[data-panel]').forEach(b=>b.onclick=()=>{if(measure.active)setMeasuring(fals
 $('#undo').onclick=()=>undoRedo();$('#redo').onclick=()=>undoRedo(true);$('#measure-toggle').onclick=()=>setMeasuring(!measure.active);$('#measure-close').onclick=()=>setMeasuring(false);$('#measure-clear').onclick=()=>{measure.a=measure.b=measure.preview=null;refreshMeasurement();};
 $$('[data-measure-axis]').forEach(b=>b.onclick=()=>{measure.axis=b.dataset.measureAxis;$$('[data-measure-axis]').forEach(x=>x.setAttribute('aria-pressed',x===b));});
 document.addEventListener('keydown',e=>{if(mode==='walk'||e.target.closest('input,textarea,select,[contenteditable=true]')||document.querySelector('dialog[open]'))return;const key=e.key.toLowerCase();if((e.ctrlKey||e.metaKey)&&['z','y'].includes(key)){e.preventDefault();undoRedo(key==='y'||e.shiftKey);}else if(key==='escape'&&measure.active)setMeasuring(false);});
+$('#view-only-toggle').onclick=()=>{setViewOnly(!viewOnly);if(viewOnly)closePanel();toast(viewOnly?'已開啟僅檢視，拖曳不會移動家具':'已切換編輯，可拖曳家具');};
 $('#close-panel').onclick=closePanel;$('#mode2d').onclick=()=>setMode('2d');$('#mode3d').onclick=()=>setMode('3d');$('#reset-view').onclick=()=>resetView();$('#top-view').onclick=()=>resetView(true);$('#zoom-in').onclick=()=>mode==='2d'?plan.zoom(1.18):scene?.zoom(1.18);$('#zoom-out').onclick=()=>mode==='2d'?plan.zoom(1/1.18):scene?.zoom(1/1.18);$('#finish-move').onclick=()=>{setMoving(false);showPanel('edit');};$('#cancel-reset').onclick=()=>$('#reset-dialog').close();$('#confirm-reset').onclick=()=>{itemInfoUI.clear();maintenanceUI.clear();state=defaults();selected=null;setMoving(false);render(true);persist();$('#reset-dialog').close();showPanel('objects');toast('已恢復預設配置');collectAssets().catch(()=>{});};
 // 拖曳後部分觸控瀏覽器會抑制相容性 click；完成按鈕直接處理 touch pointerup。
 $('#modewalk').onclick=()=>setMode('walk');

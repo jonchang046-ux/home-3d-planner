@@ -12,7 +12,7 @@ import {createFurnitureModel} from './furniture-factory.js';
 import {WalkController} from './walk-controller.js';
 import {roomMaterial,drawFloorPattern} from './room-materials.js';
 import {formatDistance,measurementDistance} from './planner-geometry.js';
-export function createScene(container,{onSelect,onMove,onMoveStart=()=>{},onMoveEnd,onMoveCancel=()=>{},isMoving,onWalkHint,onAssetError=()=>{},getMeasurement=()=>({active:false}),onMeasure=()=>{},onMeasurePreview=()=>{}}){
+export function createScene(container,{onSelect,onMove,onMoveStart=()=>{},onMoveEnd,onMoveCancel=()=>{},isMoving,isViewOnly=()=>false,onWalkHint,onAssetError=()=>{},getMeasurement=()=>({active:false}),onMeasure=()=>{},onMeasurePreview=()=>{}}){
   const scene=new THREE.Scene(),renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
   renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.outputColorSpace=THREE.SRGBColorSpace;
   renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.BasicShadowMap;
@@ -72,7 +72,7 @@ export function createScene(container,{onSelect,onMove,onMoveStart=()=>{},onMove
   }
   renderer.domElement.addEventListener('pointerdown',e=>{if(walking||e.button!==0)return;
     if(down&&down.pointer!==e.pointerId){const old=down;endPointer({pointerId:old.pointer},true);return;}
-    const measuring=getMeasurement().active,id=measuring?null:isMoving()?selected:pick(e);if(!id&&!measuring)return;
+    const measuring=getMeasurement().active;if(isViewOnly()&&!measuring)return;const id=measuring?null:isMoving()?selected:pick(e);if(!id&&!measuring)return;
     down={x:e.clientX,y:e.clientY,id,pointer:e.pointerId,moved:false,measure:measuring};controls.enabled=false;e.preventDefault();e.stopImmediatePropagation();renderer.domElement.setPointerCapture(e.pointerId);
     if(id){const f=state.furniture.find(f=>f.id===id),p=groundPoint(e,elevation(f));if(p&&f){onMoveStart(id);drag={id,dx:f.x-p.x,dz:f.z-p.z,y:elevation(f)};}}
   },true);
@@ -116,5 +116,5 @@ export function createScene(container,{onSelect,onMove,onMoveStart=()=>{},onMove
     furnishings.traverse(o=>{if(o.userData.editorOnly)o.visible=!value;});resize();return true;
   }
   function retryModels(){retrying=true;releaseCache();failedAssets.clear();for(const g of [...furnishings.children])if(g.userData.modelStatus==='fallback'){furnishings.remove(g);disposeModel(g);}render(state,selected);retrying=false;}
-  return {render,reset,setWalk,retryModels,renderMeasurement,setMeasuring(){controls.enabled=!walking&&!isMoving()&&!getMeasurement().active;renderMeasurement();},resetWalk:()=>walk.reset(),get walkPose(){return walk.snapshot;},get orbitPose(){return {position:camera.position.toArray(),target:controls.target.toArray(),enabled:controls.enabled,ceiling:ceiling.visible};},zoom(f){camera.position.sub(controls.target).multiplyScalar(1/f).add(controls.target);controls.update();},setActive(v){active=v;if(v)resize();},setMoving(v){controls.enabled=!v&&!walking&&!getMeasurement().active;},setWalls(v){lowWalls=v;architecture();},setLabels(v){showLabels=v;labels.visible=v&&!walking;},get lightingState(){return lightingSnapshot;},get lowWalls(){return lowWalls;},get showLabels(){return showLabels;},canvas:renderer.domElement};
+  return {render,reset,setWalk,setViewOnly(){if(down)endPointer({pointerId:down.pointer},true);controls.enabled=!walking&&!getMeasurement().active&&(isViewOnly()||!isMoving());},retryModels,renderMeasurement,setMeasuring(){controls.enabled=!walking&&!isMoving()&&!getMeasurement().active;renderMeasurement();},resetWalk:()=>walk.reset(),get walkPose(){return walk.snapshot;},get orbitPose(){return {position:camera.position.toArray(),target:controls.target.toArray(),enabled:controls.enabled,ceiling:ceiling.visible};},zoom(f){camera.position.sub(controls.target).multiplyScalar(1/f).add(controls.target);controls.update();},setActive(v){active=v;if(v)resize();},setMoving(v){controls.enabled=!v&&!walking&&!getMeasurement().active;},setWalls(v){lowWalls=v;architecture();},setLabels(v){showLabels=v;labels.visible=v&&!walking;},get lightingState(){return lightingSnapshot;},get lowWalls(){return lowWalls;},get showLabels(){return showLabels;},canvas:renderer.domElement};
 }
