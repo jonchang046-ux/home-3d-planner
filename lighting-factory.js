@@ -1,7 +1,7 @@
 import * as THREE from './vendor/three.module.js';
 import {trackGeometry,roundLightGeometry} from './lighting.js';
 export function createLighting(house){const root=new THREE.Group();root.name='天花燈具';
- for(const s of trackGeometry(house)){const group=new THREE.Group();group.name='軌道燈';group.userData.fixtureId=s.id;group.userData.roomId=s.roomId;
+ for(const s of trackGeometry(house)){const group=new THREE.Group();group.name='軌道燈';group.userData.fixtureId=s.id;group.userData.roomId=s.roomId;for(const key of ['brand','model','powerW','lumens','beamAngleDeg','colorTemperatureK'])group.userData[key]=s[key];
  const metal=new THREE.MeshStandardMaterial({color:s.color,roughness:.5,metalness:.45}),lens=new THREE.MeshStandardMaterial({color:s.lightColor,emissive:s.lightColor,emissiveIntensity:.7,roughness:.3});
  for(const r of s.rails){const mesh=new THREE.Mesh(new THREE.BoxGeometry(r.length,s.railHeight,s.railWidth),metal);mesh.name='燈軌';mesh.position.set((r.a[0]+r.b[0])/2,s.railCenterY,(r.a[1]+r.b[1])/2);mesh.rotation.y=-Math.atan2(r.b[1]-r.a[1],r.b[0]-r.a[0]);group.add(mesh);}
  const bodyGeo=new THREE.CylinderGeometry(s.headRadius,s.headRadius,s.headHeight,12),stemGeo=new THREE.CylinderGeometry(s.headRadius*.25,s.headRadius*.25,s.stemHeight,8),lensGeo=new THREE.CylinderGeometry(s.headRadius*.82,s.headRadius*.82,.003,12);

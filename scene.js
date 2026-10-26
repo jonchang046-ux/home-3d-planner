@@ -3,7 +3,7 @@ import {elevation} from './placement-data.js';
 import {createStructures} from './structure-factory.js';
 import {createLighting} from './lighting-factory.js';
 import {createLightSimulation} from './light-simulation.js';
-import {finishedWallParts,ceilingColorFor} from './scene-settings.js';
+import {finishedWallParts,ceilingColorFor,coveredWallEndFaces} from './scene-settings.js';
 import {templateFor,fittedModel,disposeModel,pruneModelCache,releaseCache} from './item-models.js';
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
@@ -39,7 +39,7 @@ export function createScene(container,{onSelect,onMove,onMoveStart=()=>{},onMove
       const points=room.polygon.map(p=>new THREE.Vector3(p[0],.005,p[1]));points.push(points[0].clone());building.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),new THREE.LineBasicMaterial({color:'#9d9f87',transparent:true,opacity:.35})));
     }
     for(const wall of house.walls){const length=Math.hypot(wall.b[0]-wall.a[0],wall.b[1]-wall.a[1]),ux=(wall.b[0]-wall.a[0])/length,uz=(wall.b[1]-wall.a[1])/length,height=lowWalls&&!walking?Math.min(.72,wall.height??house.defaults.wallHeight):(wall.height??house.defaults.wallHeight);
-      for(const p of finishedWallParts(house,state,wall,wallParts(wall))){const top=Math.min(height,p.bottom+p.height);if(top<=p.bottom)continue;const mesh=box(building,p.length,top-p.bottom,house.defaults.wallThickness,wall.a[0]+ux*(p.start+p.length/2),(top+p.bottom)/2,wall.a[1]+uz*(p.start+p.length/2),state.wallColor);mesh.rotation.y=-Math.atan2(uz,ux);mesh.userData.wallId=wall.id;if(p.color){const base=mesh.material,accent=mat(p.color);mesh.material=Array(6).fill(base);mesh.material[p.surface.side==='positive'?4:5]=accent;mesh.userData.wallSurfaceId=p.surface.id;}}
+      for(const p of finishedWallParts(house,state,wall,wallParts(wall))){const top=Math.min(height,p.bottom+p.height);if(top<=p.bottom)continue;const mesh=box(building,p.length,top-p.bottom,house.defaults.wallThickness,wall.a[0]+ux*(p.start+p.length/2),(top+p.bottom)/2,wall.a[1]+uz*(p.start+p.length/2),state.wallColor);mesh.rotation.y=-Math.atan2(uz,ux);mesh.userData.wallId=wall.id;if(p.color){const base=mesh.material,accent=mat(p.color);mesh.material=Array(6).fill(base);mesh.material[p.surface.side==='positive'?4:5]=accent;mesh.userData.wallSurfaceId=p.surface.id;}const hidden=coveredWallEndFaces(house,wall,p);if(hidden.length){if(!Array.isArray(mesh.material))mesh.material=Array(6).fill(mesh.material);mesh.geometry.groups=mesh.geometry.groups.filter(g=>!hidden.includes(g.materialIndex));mesh.userData.hiddenWallEndFaces=hidden;}}
       if(lowWalls&&!walking)for(const p of wallParts(wall)){const invisible=new THREE.MeshBasicMaterial({colorWrite:false,depthWrite:false});const blocker=box(building,p.length,p.height,house.defaults.wallThickness,wall.a[0]+ux*(p.start+p.length/2),p.bottom+p.height/2,wall.a[1]+uz*(p.start+p.length/2),invisible);blocker.rotation.y=-Math.atan2(uz,ux);blocker.userData.lightOccluder=true;}
       for(const o of openings(wall)){
         const x=wall.a[0]+ux*(o.offset+o.width/2),z=wall.a[1]+uz*(o.offset+o.width/2);
